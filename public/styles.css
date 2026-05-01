@@ -1,0 +1,32 @@
+:root {
+  --parchment: #f4e5c2;
+  --parchment-dark: #e8d4a6;
+  --ink: #2a1f0e;
+  --ink-soft: #4a3a20;
+  --accent: #8b4513;
+  --success: #5a6f3a;
+  --failure: #843131;
+  --display-font: 'IM Fell English SC', serif;
+  --body-font: 'EB Garamond', Georgia, serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--parchment);
+  color: var(--ink);
+  font-family: var(--body-font);
+  font-size: 18px;
+  line-height: 1.5;
+}
+
+#app {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}

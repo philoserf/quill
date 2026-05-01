@@ -6,8 +6,8 @@
   --accent: #8b4513;
   --success: #5a6f3a;
   --failure: #843131;
-  --display-font: 'IM Fell English SC', serif;
-  --body-font: 'EB Garamond', Georgia, serif;
+  --display-font: "IM Fell English SC", serif;
+  --body-font: "EB Garamond", Georgia, serif;
 }
 
 * {

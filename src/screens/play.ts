@@ -288,13 +288,17 @@ function renderRollHeart(ctx: PlayCtx): HTMLElement {
   rollBtn.className = 'btn btn--primary';
   rollBtn.textContent = 'Roll dice';
   rollBtn.addEventListener('click', () => {
-    const dice = roll(plan.diceCount);
-    currentDraft.heartRoll = dice;
-    currentDraft.phase = 'ROLL_LANGUAGE';
-    if (skillBonusActive) {
-      currentDraft.skillUsedHere = 'heart';
-    }
-    rerender(ctx);
+    rollBtn.classList.add('shake');
+    rollBtn.disabled = true;
+    setTimeout(() => {
+      const dice = roll(plan.diceCount);
+      currentDraft.heartRoll = dice;
+      currentDraft.phase = 'ROLL_LANGUAGE';
+      if (skillBonusActive) {
+        currentDraft.skillUsedHere = 'heart';
+      }
+      rerender(ctx);
+    }, 250);
   });
   wrap.appendChild(rollBtn);
   return wrap;
@@ -335,11 +339,15 @@ function renderRollLanguage(ctx: PlayCtx): HTMLElement {
   rollBtn.className = 'btn btn--primary';
   rollBtn.textContent = 'Roll dice';
   rollBtn.addEventListener('click', () => {
-    const dice = roll(plan.diceCount);
-    currentDraft.languageRoll = dice;
-    if (skillBonusActive) currentDraft.skillUsedHere = 'language';
-    currentDraft.phase = 'WRITE';
-    rerender(ctx);
+    rollBtn.classList.add('shake');
+    rollBtn.disabled = true;
+    setTimeout(() => {
+      const dice = roll(plan.diceCount);
+      currentDraft.languageRoll = dice;
+      if (skillBonusActive) currentDraft.skillUsedHere = 'language';
+      currentDraft.phase = 'WRITE';
+      rerender(ctx);
+    }, 250);
   });
   wrap.appendChild(rollBtn);
   return wrap;
@@ -441,17 +449,21 @@ function renderRollPenmanship(ctx: PlayCtx): HTMLElement {
   rollBtn.className = 'btn btn--primary';
   rollBtn.textContent = 'Roll dice';
   rollBtn.addEventListener('click', () => {
-    let dice = roll(plan.diceCount);
-    if (plan.rerollPolicy === 'highest' && dice.length > 0) {
-      const max = Math.max(...dice);
-      const i = dice.indexOf(max);
-      const re = roll(1)[0] ?? 1;
-      dice = [...dice.slice(0, i), re, ...dice.slice(i + 1)];
-    }
-    currentDraft.penmanshipRoll = dice;
-    if (skillBonusActive) currentDraft.skillUsedHere = 'penmanship';
-    currentDraft.phase = 'PARAGRAPH_DONE';
-    rerender(ctx);
+    rollBtn.classList.add('shake');
+    rollBtn.disabled = true;
+    setTimeout(() => {
+      let dice = roll(plan.diceCount);
+      if (plan.rerollPolicy === 'highest' && dice.length > 0) {
+        const max = Math.max(...dice);
+        const i = dice.indexOf(max);
+        const re = roll(1)[0] ?? 1;
+        dice = [...dice.slice(0, i), re, ...dice.slice(i + 1)];
+      }
+      currentDraft.penmanshipRoll = dice;
+      if (skillBonusActive) currentDraft.skillUsedHere = 'penmanship';
+      currentDraft.phase = 'PARAGRAPH_DONE';
+      rerender(ctx);
+    }, 250);
   });
   wrap.appendChild(rollBtn);
   return wrap;

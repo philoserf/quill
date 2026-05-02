@@ -1,0 +1,53 @@
+{
+  "id": "king",
+  "title": "The King",
+  "profile": [
+    "You are corresponding with King Gerald V, who you have only met on one occasion. He is a tyrant and unloved by the populace.",
+    "You are writing to inform the King of a suspicious fellow you have seen about town who you believe to be a spy. You must convince him that you are not a raving lunatic and to take your concerns seriously, while being cordial."
+  ],
+  "rulesOfCorrespondence": [
+    {
+      "type": "dice_bonus",
+      "attribute": "penmanship",
+      "amount": 1,
+      "description": "You are using a high quality parchment and seal. Gain an extra Penmanship die."
+    },
+    {
+      "type": "dice_bonus",
+      "attribute": "heart",
+      "amount": 1,
+      "appliesTo": { "characters": ["courtier"] },
+      "description": "Courtiers gain an extra Heart die this scenario."
+    }
+  ],
+  "inkPot": [
+    { "inferior": "Gerald", "superior": "Your Majesty" },
+    { "inferior": "Smithy", "superior": "Blacksmith" },
+    { "inferior": "Funny man", "superior": "Curious individual" },
+    { "inferior": "Hidden", "superior": "Concealed" },
+    { "inferior": "Poison", "superior": "Deadly Nightshade" },
+    { "inferior": "Big bloke", "superior": "Imposing man" },
+    { "inferior": "Cow house", "superior": "Barn" },
+    { "inferior": "Furry lip", "superior": "Moustache" },
+    { "inferior": "Buggered face", "superior": "Scarred visage" },
+    { "inferior": "Worrying", "superior": "Alarming" }
+  ],
+  "consequences": [
+    {
+      "threshold": 0,
+      "text": "The King does not respond. Several days after you sent your missive you are visited by the royal guard and brought to prison for your disrespectful letter."
+    },
+    {
+      "threshold": 5,
+      "text": "You receive a letter from the captain of the royal guard thanking you, but she does not believe you and does not wish you to write again."
+    },
+    {
+      "threshold": 8,
+      "text": "You receive a letter from a senior official close to the King thanking you. You also receive a monetary reward in the letter."
+    },
+    {
+      "threshold": 11,
+      "text": "The King writes to you personally with great thanks. He has positioned his guard close by and the spy will be caught. You are invited to the King's court as a guest and hero."
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "name": "quill",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun ./public/index.html",
+    "build": "bun build ./public/index.html --outdir dist",
+    "test": "bun test",
+    "check": "biome check --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.0",
+    "@types/bun": "latest",
+    "typescript": "^5.5.0"
+  }
+}

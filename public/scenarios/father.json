@@ -1,0 +1,47 @@
+{
+  "id": "father",
+  "title": "The Father",
+  "profile": [
+    "You are corresponding with Mr Anthony Winsborough, an old friend of yours, whose son, Rupert, was found dead near your residences.",
+    "You are writing to inform Anthony of his son's death. You must be sensitive and explain what happened and how you found Rupert."
+  ],
+  "rulesOfCorrespondence": [
+    {
+      "type": "dice_bonus",
+      "attribute": "language",
+      "amount": 1,
+      "appliesTo": { "characters": ["monk"] },
+      "description": "Anthony would prefer to hear this news from a person of the cloth. Monks and nuns gain an extra die when rolling Language tests for this scenario."
+    }
+  ],
+  "inkPot": [
+    { "inferior": "Your boy", "superior": "Your dear son" },
+    { "inferior": "Corpse", "superior": "Body" },
+    { "inferior": "Bawdy house", "superior": "Drinking establishment" },
+    { "inferior": "Brutal", "superior": "Harrowing" },
+    { "inferior": "I'm sorry", "superior": "My infinite condolences" },
+    { "inferior": "At peace", "superior": "In heaven" },
+    { "inferior": "A guard", "superior": "The police" },
+    { "inferior": "Sadness", "superior": "Sorrow" },
+    { "inferior": "Rain", "superior": "Downpour" },
+    { "inferior": "Box", "superior": "Coffin" }
+  ],
+  "consequences": [
+    {
+      "threshold": 0,
+      "text": "Anthony responds aggressively, blaming you for not being there for him and for not caring. You no longer hear from Anthony."
+    },
+    {
+      "threshold": 5,
+      "text": "Anthony's is clearly disappointed in how you have relayed the information to him, but he does not blame you."
+    },
+    {
+      "threshold": 8,
+      "text": "Anthony thanks you for telling him about his son and invites you to his funeral."
+    },
+    {
+      "threshold": 11,
+      "text": "Anthony commends you for your letter and wishes you to speak at his son's funeral."
+    }
+  ]
+}

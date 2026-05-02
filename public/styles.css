@@ -162,3 +162,23 @@ body {
 .scenario-box p {
   margin: 0.5rem 0;
 }
+
+.pick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.5rem;
+  margin: 0.5rem 0 1rem;
+}
+.flourish-input {
+  width: 100%;
+  padding: 0.5rem;
+  font-family: var(--body-font);
+  font-size: 1rem;
+  background: var(--parchment);
+  border: 1px solid var(--ink-soft);
+}
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}

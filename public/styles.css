@@ -116,3 +116,49 @@ body {
 .btn--primary:hover {
   background: var(--ink-soft);
 }
+
+.play-grid {
+  display: grid;
+  grid-template-columns: 240px 1fr 280px;
+  gap: 1rem;
+}
+
+@media (max-width: 900px) {
+  .play-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel {
+  background: var(--parchment-dark);
+  border: 1px solid var(--ink-soft);
+  padding: 1rem;
+}
+
+.panel h3,
+.panel h4,
+.panel h5 {
+  font-family: var(--display-font);
+  margin: 0 0 0.5rem;
+}
+
+.inkpot-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.inkpot-item {
+  padding: 0.4rem 0;
+  border-bottom: 1px dotted var(--ink-soft);
+}
+.inkpot-item--used {
+  color: var(--ink-soft);
+  text-decoration: line-through;
+}
+
+.scenario-box {
+  font-size: 0.95rem;
+}
+.scenario-box p {
+  margin: 0.5rem 0;
+}

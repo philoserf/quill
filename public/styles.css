@@ -280,3 +280,35 @@ body {
   gap: 1rem;
   margin: 2rem 0;
 }
+
+body {
+  background: radial-gradient(ellipse at top, rgba(255, 255, 255, 0.4), transparent 60%),
+    radial-gradient(ellipse at bottom, rgba(0, 0, 0, 0.05), transparent 60%), var(--parchment);
+  background-attachment: fixed;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5 {
+  letter-spacing: 0.02em;
+}
+
+.display-heading::after {
+  content: "";
+  display: block;
+  margin: 0.5rem auto 0;
+  width: 6rem;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--ink-soft), transparent);
+}
+
+.screen {
+  padding: 1rem 0;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

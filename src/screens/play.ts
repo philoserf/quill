@@ -532,6 +532,10 @@ function renderParagraphDone(ctx: PlayCtx): HTMLElement {
     const inkPotIndex = draft.inkPotIndex;
     const languageRoll = draft.languageRoll;
     const penmanshipRoll = draft.penmanshipRoll;
+    // Reset the draft BEFORE onUpdate. The store notifies subscribers synchronously,
+    // which triggers a re-render that reads currentDraft.phase. If we reset after,
+    // the re-render shows PARAGRAPH_DONE again and the player has to reload.
+    currentDraft = emptyDraft();
     ctx.onUpdate((s) => {
       const newPara = {
         inkPotIndex,
@@ -549,7 +553,6 @@ function renderParagraphDone(ctx: PlayCtx): HTMLElement {
         paragraphs.length >= 5 ? 'finished' : 'in_progress';
       return { ...s, paragraphs, skillSpent, status };
     });
-    currentDraft = emptyDraft();
   });
   wrap.appendChild(next);
   return wrap;

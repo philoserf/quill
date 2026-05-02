@@ -121,8 +121,14 @@ function renderCenterPanel(ctx: PlayCtx): HTMLElement {
     case 'ROLL_LANGUAGE':
       panel.appendChild(renderRollLanguage(ctx));
       break;
-    default:
-      panel.appendChild(document.createTextNode(`(phase: ${currentDraft.phase})`));
+    case 'WRITE':
+      panel.appendChild(renderWrite(ctx));
+      break;
+    case 'ROLL_PENMANSHIP':
+      panel.appendChild(renderRollPenmanship(ctx));
+      break;
+    case 'PARAGRAPH_DONE':
+      panel.appendChild(renderParagraphDone(ctx));
       break;
   }
   return panel;
@@ -320,6 +326,190 @@ function renderRollLanguage(ctx: PlayCtx): HTMLElement {
     rerender(ctx);
   });
   wrap.appendChild(rollBtn);
+  return wrap;
+}
+
+function renderWrite(ctx: PlayCtx): HTMLElement {
+  const wrap = document.createElement('div');
+  if (currentDraft.inkPotIndex === null || currentDraft.languageRoll === null) {
+    wrap.appendChild(
+      document.createTextNode('Internal error: missing inkPot index or language roll.'),
+    );
+    return wrap;
+  }
+  const pair = ctx.scenario.inkPot[currentDraft.inkPotIndex];
+  if (!pair) {
+    wrap.appendChild(document.createTextNode('Internal error: ink pot entry missing.'));
+    return wrap;
+  }
+  const isSuperior = countSuccesses(currentDraft.languageRoll) > 0;
+  const word = isSuperior ? pair.superior : pair.inferior;
+  const flourishApplied =
+    currentDraft.attemptedFlourish &&
+    currentDraft.heartRoll !== null &&
+    countSuccesses(currentDraft.heartRoll) > 0;
+  const required =
+    flourishApplied && currentDraft.flourishAdjective
+      ? `${currentDraft.flourishAdjective} ${word}`
+      : word;
+
+  const rollLine = document.createElement('p');
+  rollLine.innerHTML = `Language roll: ${formatDice(currentDraft.languageRoll)} — ${
+    isSuperior ? '<span class="success">Superior</span>' : '<span class="failure">Inferior</span>'
+  } word.`;
+  wrap.appendChild(rollLine);
+
+  const chip = document.createElement('p');
+  chip.className = 'word-chip';
+  chip.textContent = `Incorporate: ${required}`;
+  wrap.appendChild(chip);
+
+  const ta = document.createElement('textarea');
+  ta.className = 'paragraph-area';
+  ta.rows = 6;
+  ta.placeholder = `Write your paragraph using "${required}".`;
+  ta.value = currentDraft.text;
+  wrap.appendChild(ta);
+
+  const indicator = document.createElement('p');
+  indicator.className = 'word-indicator';
+  indicator.textContent = currentDraft.text.toLowerCase().includes(required.toLowerCase())
+    ? '✓ word found in paragraph'
+    : '… word not yet present';
+  wrap.appendChild(indicator);
+
+  ta.addEventListener('input', () => {
+    currentDraft.text = ta.value;
+    indicator.textContent = ta.value.toLowerCase().includes(required.toLowerCase())
+      ? '✓ word found in paragraph'
+      : '… word not yet present';
+  });
+
+  const next = document.createElement('button');
+  next.type = 'button';
+  next.className = 'btn btn--primary';
+  next.textContent = 'Finish paragraph (Penmanship roll)';
+  next.addEventListener('click', () => {
+    currentDraft.phase = 'ROLL_PENMANSHIP';
+    rerender(ctx);
+  });
+  wrap.appendChild(next);
+  return wrap;
+}
+
+function renderRollPenmanship(ctx: PlayCtx): HTMLElement {
+  const wrap = document.createElement('div');
+  const character = CHARACTERS.find((c) => c.id === ctx.session.characterId);
+  if (!character) {
+    wrap.appendChild(document.createTextNode('Character not found.'));
+    return wrap;
+  }
+  const skillBonusActive = canSpendSkill(ctx, 'penmanship');
+  const plan = planRoll({
+    attribute: 'penmanship',
+    character,
+    scenario: ctx.scenario,
+    skillBonusActive,
+  });
+
+  const info = document.createElement('p');
+  info.textContent = `Roll Penmanship (${plan.diceCount} dice${plan.rerollPolicy === 'highest' ? ', re-roll the highest' : ''}${skillBonusActive ? ', skill applied' : ''}).`;
+  wrap.appendChild(info);
+
+  if (canSpendSkillButton(ctx, 'penmanship')) {
+    wrap.appendChild(makeSkillButton(ctx, 'penmanship', () => rerender(ctx)));
+  }
+
+  const rollBtn = document.createElement('button');
+  rollBtn.type = 'button';
+  rollBtn.className = 'btn btn--primary';
+  rollBtn.textContent = 'Roll dice';
+  rollBtn.addEventListener('click', () => {
+    let dice = roll(plan.diceCount);
+    if (plan.rerollPolicy === 'highest' && dice.length > 0) {
+      const max = Math.max(...dice);
+      const i = dice.indexOf(max);
+      const re = roll(1)[0] ?? 1;
+      dice = [...dice.slice(0, i), re, ...dice.slice(i + 1)];
+    }
+    currentDraft.penmanshipRoll = dice;
+    if (skillBonusActive) currentDraft.skillUsedHere = 'penmanship';
+    currentDraft.phase = 'PARAGRAPH_DONE';
+    rerender(ctx);
+  });
+  wrap.appendChild(rollBtn);
+  return wrap;
+}
+
+function renderParagraphDone(ctx: PlayCtx): HTMLElement {
+  const wrap = document.createElement('div');
+  if (
+    currentDraft.inkPotIndex === null ||
+    currentDraft.languageRoll === null ||
+    currentDraft.penmanshipRoll === null
+  ) {
+    wrap.appendChild(document.createTextNode('Internal error: missing roll data.'));
+    return wrap;
+  }
+  const pair = ctx.scenario.inkPot[currentDraft.inkPotIndex];
+  if (!pair) {
+    wrap.appendChild(document.createTextNode('Internal error: ink pot entry missing.'));
+    return wrap;
+  }
+  const isSuperior = countSuccesses(currentDraft.languageRoll) > 0;
+  const flourishApplied =
+    currentDraft.attemptedFlourish &&
+    currentDraft.heartRoll !== null &&
+    countSuccesses(currentDraft.heartRoll) > 0;
+  const penOk = countSuccesses(currentDraft.penmanshipRoll) > 0;
+  let pts = isSuperior ? (flourishApplied ? 2 : 1) : flourishApplied ? -1 : 0;
+  if (penOk) pts += 1;
+
+  const summary = document.createElement('p');
+  summary.innerHTML = `Word: ${isSuperior ? pair.superior : pair.inferior} (${
+    isSuperior ? '<span class="success">superior</span>' : '<span class="failure">inferior</span>'
+  })${flourishApplied ? ` + flourish "${currentDraft.flourishAdjective}"` : ''}.<br>
+    Penmanship: ${formatDice(currentDraft.penmanshipRoll)} — ${penOk ? '<span class="success">+1</span>' : '<span class="failure">no bonus</span>'}.<br>
+    <strong>Points this paragraph: ${pts}</strong>`;
+  wrap.appendChild(summary);
+
+  const isLast = ctx.session.paragraphs.length === 4;
+  const next = document.createElement('button');
+  next.type = 'button';
+  next.className = 'btn btn--primary';
+  next.textContent = isLast ? 'Finish letter' : 'Next paragraph';
+  next.addEventListener('click', () => {
+    const draft = currentDraft;
+    if (
+      draft.inkPotIndex === null ||
+      draft.languageRoll === null ||
+      draft.penmanshipRoll === null
+    ) {
+      return;
+    }
+    const inkPotIndex = draft.inkPotIndex;
+    const languageRoll = draft.languageRoll;
+    const penmanshipRoll = draft.penmanshipRoll;
+    ctx.onUpdate((s) => {
+      const newPara = {
+        inkPotIndex,
+        attemptedFlourish: draft.attemptedFlourish,
+        flourishAdjective: draft.attemptedFlourish ? draft.flourishAdjective : null,
+        heartRoll: draft.heartRoll,
+        languageRoll,
+        penmanshipRoll,
+        skillUsedHere: draft.skillUsedHere,
+        text: draft.text,
+      };
+      const skillSpent = s.skillSpent || draft.skillUsedHere !== null;
+      const paragraphs = [...s.paragraphs, newPara];
+      const status: 'in_progress' | 'finished' =
+        paragraphs.length >= 5 ? 'finished' : 'in_progress';
+      return { ...s, paragraphs, skillSpent, status };
+    });
+    currentDraft = emptyDraft();
+  });
+  wrap.appendChild(next);
   return wrap;
 }
 

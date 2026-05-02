@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { loadScenarios, validateScenario } from '../src/scenarios';
+import { validateScenario } from '../src/scenarios';
 
 describe('validateScenario', () => {
   const valid = {

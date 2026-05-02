@@ -213,3 +213,15 @@ body {
   font-size: 0.9rem;
   color: var(--ink-soft);
 }
+
+.letter-so-far {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--ink-soft);
+}
+.letter-so-far p {
+  margin: 0.5rem 0;
+}
+.running-score {
+  margin-top: 1rem;
+}

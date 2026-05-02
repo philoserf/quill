@@ -131,6 +131,22 @@ function renderCenterPanel(ctx: PlayCtx): HTMLElement {
       panel.appendChild(renderParagraphDone(ctx));
       break;
   }
+
+  const completed = ctx.session.paragraphs;
+  if (completed.length > 0) {
+    const lsf = document.createElement('div');
+    lsf.className = 'letter-so-far';
+    const h = document.createElement('h4');
+    h.textContent = 'Letter so far';
+    lsf.appendChild(h);
+    for (const completedPara of completed) {
+      const para = document.createElement('p');
+      para.textContent = completedPara.text || '(empty paragraph)';
+      lsf.appendChild(para);
+    }
+    panel.appendChild(lsf);
+  }
+
   return panel;
 }
 
@@ -530,6 +546,23 @@ function renderRightPanel(ctx: PlayCtx): HTMLElement {
     <h5>Rules of Correspondence</h5>
     ${ctx.scenario.rulesOfCorrespondence.map((r) => `<p>${r.description}</p>`).join('') || '<p>None.</p>'}`;
   panel.appendChild(scenarioBox);
+
+  // running score
+  const totals = ctx.session.paragraphs.reduce<{ pts: number }>(
+    (acc, p) => {
+      const isSuperior = countSuccesses(p.languageRoll) > 0;
+      const flourishApplied =
+        p.attemptedFlourish && p.heartRoll !== null && countSuccesses(p.heartRoll) > 0;
+      let pts = isSuperior ? (flourishApplied ? 2 : 1) : flourishApplied ? -1 : 0;
+      if (countSuccesses(p.penmanshipRoll) > 0) pts += 1;
+      return { pts: acc.pts + pts };
+    },
+    { pts: 0 },
+  );
+  const scoreLine = document.createElement('p');
+  scoreLine.className = 'running-score';
+  scoreLine.innerHTML = `<strong>Running score: ${totals.pts}</strong> (after ${ctx.session.paragraphs.length}/5)`;
+  panel.appendChild(scoreLine);
 
   return panel;
 }

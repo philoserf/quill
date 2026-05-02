@@ -225,3 +225,58 @@ body {
 .running-score {
   margin-top: 1rem;
 }
+
+.score-banner {
+  text-align: center;
+  margin: 2rem 0;
+}
+.score-banner h2 {
+  font-family: var(--display-font);
+  font-size: 2.5rem;
+  margin: 0;
+}
+.score-total {
+  font-size: 1.4rem;
+}
+.consequence {
+  font-style: italic;
+  max-width: 50rem;
+  margin: 1rem auto;
+}
+
+.finished-letter {
+  background: var(--parchment);
+  border: 1px solid var(--ink-soft);
+  padding: 2rem;
+  max-width: 50rem;
+  margin: 2rem auto;
+  font-size: 1.1rem;
+  line-height: 1.7;
+}
+.finished-letter p {
+  margin: 0 0 1rem;
+  text-indent: 1.5rem;
+}
+
+.breakdown {
+  max-width: 50rem;
+  margin: 1rem auto;
+}
+.breakdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.breakdown-table th,
+.breakdown-table td {
+  border-bottom: 1px solid var(--ink-soft);
+  padding: 0.4rem;
+  text-align: left;
+}
+
+.actions--score {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin: 2rem 0;
+}

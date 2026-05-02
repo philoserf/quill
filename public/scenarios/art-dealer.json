@@ -1,0 +1,45 @@
+{
+  "id": "art-dealer",
+  "title": "The Art Dealer",
+  "profile": [
+    "You are corresponding with Christina Bowbridge, renowned art dealer who is known for her enthusiastic personality and adoration of the monarchy.",
+    "You are writing to inquire about buying a portrait of Prince Edward IV, however you have heard rumours that this painting could be a fake, but you must find this information from Christina without offending her."
+  ],
+  "rulesOfCorrespondence": [
+    {
+      "type": "reroll_highest",
+      "attribute": "penmanship",
+      "description": "Ms Bowbridge likes to be impressed with beautiful calligraphy so you must take care. When making a Penmanship test, re-roll the highest die and accept the final roll."
+    }
+  ],
+  "inkPot": [
+    { "inferior": "The Prince", "superior": "His Royal Highness Prince Edward IV" },
+    { "inferior": "Fake", "superior": "Reproduction" },
+    { "inferior": "Colours", "superior": "Spectrum" },
+    { "inferior": "I'm sorry", "superior": "I apologise profusely" },
+    { "inferior": "Fountain", "superior": "Great Fountain of Aleah" },
+    { "inferior": "Look at", "superior": "Inspect" },
+    { "inferior": "Skill", "superior": "Esteemed expertise" },
+    { "inferior": "My mum", "superior": "My dear mother" },
+    { "inferior": "Signature", "superior": "Inscription" },
+    { "inferior": "Tick you off", "superior": "Offend you" }
+  ],
+  "consequences": [
+    {
+      "threshold": 0,
+      "text": "Christina takes great offence to your letter and responds with a scathing letter about your character. She will not sell you the painting…ever."
+    },
+    {
+      "threshold": 5,
+      "text": "Christina's response is mild, but she has obviously taken some offence. She will sell the painting but for double the price."
+    },
+    {
+      "threshold": 8,
+      "text": "Christina is pleased with your letter and responds enthusiastically. She clearly has taken little offence and will sell you the painting."
+    },
+    {
+      "threshold": 11,
+      "text": "Christina is overwhelmed by your letter and wishes to give you the painting as a gift."
+    }
+  ]
+}

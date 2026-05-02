@@ -1,0 +1,53 @@
+{
+  "id": "archduke",
+  "title": "The Archduke",
+  "profile": [
+    "You are corresponding with the Archduke Godfrey, a powerful member of the royal family who is known for his serious demeanour.",
+    "You are writing to give your condolences for the passing of his sister, Mary of Linchester. She came down with the consumption and passed a week ago. You were acquainted with her, having been in the same school when you were young. You will bring up your past and what you both did when you were children."
+  ],
+  "rulesOfCorrespondence": [
+    {
+      "type": "dice_bonus",
+      "attribute": "heart",
+      "amount": 1,
+      "appliesTo": { "characters": ["courtier", "aristocrat"] },
+      "description": "Courtiers and Aristocrats gain an extra Heart die in this scenario"
+    },
+    {
+      "type": "dice_bonus",
+      "attribute": "penmanship",
+      "amount": 1,
+      "description": "You are using a superior parchment in this missive. Gain an extra Penmanship die."
+    }
+  ],
+  "inkPot": [
+    { "inferior": "Climbing Trees", "superior": "Scaling Oaks" },
+    { "inferior": "Death", "superior": "Passing" },
+    { "inferior": "Teachers", "superior": "Scholars" },
+    { "inferior": "Rode Horses", "superior": "Rode Stallions" },
+    { "inferior": "Town", "superior": "Riverton" },
+    { "inferior": "Ducks", "superior": "Mallards" },
+    { "inferior": "Angels", "superior": "Seraphim" },
+    { "inferior": "Fields", "superior": "Heather Fields" },
+    { "inferior": "Church", "superior": "Cathedral of Light" },
+    { "inferior": "Young Boy", "superior": "Young Harold of Whent" }
+  ],
+  "consequences": [
+    {
+      "threshold": 0,
+      "text": "The Archduke is disgusted by your letter. You have lost his respect and will no longer be in contact with you."
+    },
+    {
+      "threshold": 5,
+      "text": "The Archduke responds kindly, but is quick to criticise your letter. You will unlikely hear from him for some months."
+    },
+    {
+      "threshold": 8,
+      "text": "The Archduke thanks you for your kind letter. He invites you over next week to stay on his estate."
+    },
+    {
+      "threshold": 11,
+      "text": "The Archduke thanks you profusely for your excellent letter and promises that you will be repaid for your kindness with a gift of great worth."
+    }
+  ]
+}

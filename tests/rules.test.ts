@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { characterById } from '../src/data';
 import { planRoll } from '../src/rules';
 import type { Scenario } from '../src/types';
+import { must } from './helpers';
 
 const baseScenario: Scenario = {
   id: 'test',
@@ -19,7 +20,7 @@ const baseScenario: Scenario = {
 
 describe('planRoll', () => {
   test('uses character base attribute when no modifiers apply', () => {
-    const monk = characterById('monk')!;
+    const monk = must(characterById('monk'), 'monk fixture');
     const plan = planRoll({
       attribute: 'penmanship',
       character: monk,
@@ -32,7 +33,7 @@ describe('planRoll', () => {
   });
 
   test('skill bonus adds 1 die', () => {
-    const monk = characterById('monk')!;
+    const monk = must(characterById('monk'), 'monk fixture');
     const plan = planRoll({
       attribute: 'language',
       character: monk,
@@ -44,7 +45,7 @@ describe('planRoll', () => {
   });
 
   test('unconditional dice_bonus adds dice', () => {
-    const monk = characterById('monk')!;
+    const monk = must(characterById('monk'), 'monk fixture');
     const scenario: Scenario = {
       ...baseScenario,
       rulesOfCorrespondence: [
@@ -66,8 +67,8 @@ describe('planRoll', () => {
   });
 
   test('character-restricted dice_bonus only applies to listed characters', () => {
-    const monk = characterById('monk')!;
-    const courtier = characterById('courtier')!;
+    const monk = must(characterById('monk'), 'monk fixture');
+    const courtier = must(characterById('courtier'), 'courtier fixture');
     const scenario: Scenario = {
       ...baseScenario,
       rulesOfCorrespondence: [
@@ -99,7 +100,7 @@ describe('planRoll', () => {
   });
 
   test('reroll_highest policy is reflected in the plan', () => {
-    const monk = characterById('monk')!;
+    const monk = must(characterById('monk'), 'monk fixture');
     const scenario: Scenario = {
       ...baseScenario,
       rulesOfCorrespondence: [
@@ -120,7 +121,7 @@ describe('planRoll', () => {
   });
 
   test('reroll_highest only applies to its specific attribute', () => {
-    const monk = characterById('monk')!;
+    const monk = must(characterById('monk'), 'monk fixture');
     const scenario: Scenario = {
       ...baseScenario,
       rulesOfCorrespondence: [{ type: 'reroll_highest', attribute: 'penmanship', description: '' }],

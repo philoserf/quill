@@ -105,15 +105,16 @@ export function validateScenario(raw: unknown): Scenario {
   };
 }
 
-export async function loadScenarios(baseUrl = './scenarios'): Promise<Scenario[]> {
-  const manifestRes = await fetch(`${baseUrl}/manifest.json`);
-  if (!manifestRes.ok) throw new Error('Failed to fetch scenario manifest');
-  const files = (await manifestRes.json()) as string[];
-  const out: Scenario[] = [];
-  for (const f of files) {
-    const res = await fetch(`${baseUrl}/${f}`);
-    if (!res.ok) throw new Error(`Failed to fetch scenario ${f}`);
-    out.push(validateScenario(await res.json()));
-  }
-  return out;
+// Scenarios are imported at build time so the bundle is self-contained — Bun's
+// HTML dev server doesn't serve sibling JSON via fetch (it returns the SPA HTML),
+// and a bundled-in copy works identically in dev and production.
+import archduke from '../public/scenarios/archduke.json' with { type: 'json' };
+import artDealer from '../public/scenarios/art-dealer.json' with { type: 'json' };
+import father from '../public/scenarios/father.json' with { type: 'json' };
+import king from '../public/scenarios/king.json' with { type: 'json' };
+
+const BUNDLED: unknown[] = [archduke, artDealer, father, king];
+
+export function loadScenarios(): Scenario[] {
+  return BUNDLED.map((raw) => validateScenario(raw));
 }

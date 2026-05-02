@@ -84,13 +84,10 @@ function mount(scenarios: Scenario[]) {
   render();
 }
 
-(async () => {
-  try {
-    const scenarios = await loadScenarios('./scenarios');
-    mount(scenarios);
-  } catch (err) {
-    const root = document.getElementById('app');
-    if (root) root.textContent = `Failed to load Quill: ${(err as Error).message}`;
-    throw err;
-  }
-})();
+try {
+  mount(loadScenarios());
+} catch (err) {
+  const root = document.getElementById('app');
+  if (root) root.textContent = `Failed to load Quill: ${(err as Error).message}`;
+  throw err;
+}

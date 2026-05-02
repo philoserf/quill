@@ -1,4 +1,6 @@
 import { CHARACTERS, SKILLS } from '../data';
+import { countSuccesses, roll } from '../dice';
+import { planRoll } from '../rules';
 import type { GameSession, Scenario } from '../types';
 
 export interface PlayCtx {
@@ -113,8 +115,13 @@ function renderCenterPanel(ctx: PlayCtx): HTMLElement {
     case 'DECIDE_FLOURISH':
       panel.appendChild(renderDecideFlourish(ctx));
       break;
+    case 'ROLL_HEART':
+      panel.appendChild(renderRollHeart(ctx));
+      break;
+    case 'ROLL_LANGUAGE':
+      panel.appendChild(renderRollLanguage(ctx));
+      break;
     default:
-      // Subsequent tasks fill in ROLL_HEART, ROLL_LANGUAGE, WRITE, ROLL_PENMANSHIP, PARAGRAPH_DONE.
       panel.appendChild(document.createTextNode(`(phase: ${currentDraft.phase})`));
       break;
   }
@@ -191,6 +198,128 @@ function renderDecideFlourish(ctx: PlayCtx): HTMLElement {
   actions.className = 'actions';
   actions.append(attempt, skip);
   wrap.appendChild(actions);
+  return wrap;
+}
+
+function formatDice(values: number[]): string {
+  return values.map((v) => (v >= 5 ? `<span class="success">${v}</span>` : String(v))).join(' ');
+}
+
+function canSpendSkill(ctx: PlayCtx, attr: 'penmanship' | 'language' | 'heart'): boolean {
+  if (ctx.session.skillSpent) return false;
+  const skill = SKILLS.find((s) => s.id === ctx.session.skillId);
+  return !!skill && skill.bonusAttribute === attr && currentDraft.skillUsedHere === attr;
+}
+
+function canSpendSkillButton(ctx: PlayCtx, attr: 'penmanship' | 'language' | 'heart'): boolean {
+  if (ctx.session.skillSpent) return false;
+  const skill = SKILLS.find((s) => s.id === ctx.session.skillId);
+  return !!skill && skill.bonusAttribute === attr && currentDraft.skillUsedHere !== attr;
+}
+
+function makeSkillButton(
+  ctx: PlayCtx,
+  attr: 'penmanship' | 'language' | 'heart',
+  onChange: () => void,
+): HTMLElement {
+  const skill = SKILLS.find((s) => s.id === ctx.session.skillId);
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn';
+  btn.textContent = `Use ${skill?.name ?? 'skill'} (+1 ${attr} die)`;
+  btn.addEventListener('click', () => {
+    currentDraft.skillUsedHere = attr;
+    onChange();
+  });
+  return btn;
+}
+
+function renderRollHeart(ctx: PlayCtx): HTMLElement {
+  const wrap = document.createElement('div');
+  const p = document.createElement('p');
+  p.textContent = `Roll Heart to attempt a flourish ("${currentDraft.flourishAdjective}").`;
+  wrap.appendChild(p);
+
+  const character = CHARACTERS.find((c) => c.id === ctx.session.characterId);
+  if (!character) {
+    wrap.appendChild(document.createTextNode('Character not found.'));
+    return wrap;
+  }
+  const skillBonusActive = canSpendSkill(ctx, 'heart');
+  const plan = planRoll({
+    attribute: 'heart',
+    character,
+    scenario: ctx.scenario,
+    skillBonusActive,
+  });
+
+  const dicePool = document.createElement('p');
+  dicePool.textContent = `Rolling ${plan.diceCount} dice${skillBonusActive ? ' (skill applied)' : ''}.`;
+  wrap.appendChild(dicePool);
+
+  if (canSpendSkillButton(ctx, 'heart')) {
+    wrap.appendChild(makeSkillButton(ctx, 'heart', () => rerender(ctx)));
+  }
+
+  const rollBtn = document.createElement('button');
+  rollBtn.type = 'button';
+  rollBtn.className = 'btn btn--primary';
+  rollBtn.textContent = 'Roll dice';
+  rollBtn.addEventListener('click', () => {
+    const dice = roll(plan.diceCount);
+    currentDraft.heartRoll = dice;
+    currentDraft.phase = 'ROLL_LANGUAGE';
+    if (skillBonusActive) {
+      currentDraft.skillUsedHere = 'heart';
+    }
+    rerender(ctx);
+  });
+  wrap.appendChild(rollBtn);
+  return wrap;
+}
+
+function renderRollLanguage(ctx: PlayCtx): HTMLElement {
+  const wrap = document.createElement('div');
+  const character = CHARACTERS.find((c) => c.id === ctx.session.characterId);
+  if (!character) {
+    wrap.appendChild(document.createTextNode('Character not found.'));
+    return wrap;
+  }
+  const skillBonusActive = canSpendSkill(ctx, 'language');
+  const plan = planRoll({
+    attribute: 'language',
+    character,
+    scenario: ctx.scenario,
+    skillBonusActive,
+  });
+
+  if (currentDraft.heartRoll) {
+    const heartLine = document.createElement('p');
+    const ok = countSuccesses(currentDraft.heartRoll) > 0;
+    heartLine.innerHTML = `Heart roll: ${formatDice(currentDraft.heartRoll)} — ${ok ? '<span class="success">flourish stuck</span>' : '<span class="failure">flourish lost</span>'}`;
+    wrap.appendChild(heartLine);
+  }
+
+  const info = document.createElement('p');
+  info.textContent = `Roll Language (${plan.diceCount} dice${skillBonusActive ? ' — skill applied' : ''}) to determine if you draw the Superior word.`;
+  wrap.appendChild(info);
+
+  if (canSpendSkillButton(ctx, 'language')) {
+    wrap.appendChild(makeSkillButton(ctx, 'language', () => rerender(ctx)));
+  }
+
+  const rollBtn = document.createElement('button');
+  rollBtn.type = 'button';
+  rollBtn.className = 'btn btn--primary';
+  rollBtn.textContent = 'Roll dice';
+  rollBtn.addEventListener('click', () => {
+    const dice = roll(plan.diceCount);
+    currentDraft.languageRoll = dice;
+    if (skillBonusActive) currentDraft.skillUsedHere = 'language';
+    currentDraft.phase = 'WRITE';
+    rerender(ctx);
+  });
+  wrap.appendChild(rollBtn);
   return wrap;
 }
 

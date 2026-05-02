@@ -9,7 +9,7 @@ export interface ScoreResult {
   tierName: TierName;
 }
 
-function paragraphPoints(p: Paragraph): number {
+export function paragraphPoints(p: Paragraph): number {
   const isSuperior = countSuccesses(p.languageRoll) > 0;
   const flourishApplied =
     p.attemptedFlourish && p.heartRoll !== null && countSuccesses(p.heartRoll) > 0;

@@ -1,12 +1,12 @@
 import { CHARACTERS, SKILLS } from '../data';
 import { countSuccesses, roll } from '../dice';
 import { planRoll } from '../rules';
+import { paragraphPoints } from '../scoring';
 import type { GameSession, Scenario } from '../types';
 
 export interface PlayCtx {
   session: GameSession;
   scenario: Scenario;
-  onFinish: () => void;
   onUpdate: (updater: (s: GameSession) => GameSession) => void;
 }
 
@@ -494,11 +494,25 @@ function renderParagraphDone(ctx: PlayCtx): HTMLElement {
   if (penOk) pts += 1;
 
   const summary = document.createElement('p');
-  summary.innerHTML = `Word: ${isSuperior ? pair.superior : pair.inferior} (${
-    isSuperior ? '<span class="success">superior</span>' : '<span class="failure">inferior</span>'
-  })${flourishApplied ? ` + flourish "${currentDraft.flourishAdjective}"` : ''}.<br>
-    Penmanship: ${formatDice(currentDraft.penmanshipRoll)} — ${penOk ? '<span class="success">+1</span>' : '<span class="failure">no bonus</span>'}.<br>
-    <strong>Points this paragraph: ${pts}</strong>`;
+  const wordSpan = document.createElement('span');
+  wordSpan.className = isSuperior ? 'success' : 'failure';
+  wordSpan.textContent = isSuperior ? 'superior' : 'inferior';
+  summary.append(`Word: ${isSuperior ? pair.superior : pair.inferior} (`, wordSpan, ')');
+  if (flourishApplied) {
+    summary.append(` + flourish "${currentDraft.flourishAdjective}"`);
+  }
+  summary.append('.', document.createElement('br'));
+  // formatDice still emits HTML for the dice spans, so keep that as a single innerHTML
+  // line — its inputs (dice numbers) are not user-supplied.
+  const penLabel = document.createElement('span');
+  penLabel.className = penOk ? 'success' : 'failure';
+  penLabel.textContent = penOk ? '+1' : 'no bonus';
+  const diceFrag = document.createElement('span');
+  diceFrag.innerHTML = formatDice(currentDraft.penmanshipRoll);
+  summary.append('Penmanship: ', diceFrag, ' — ', penLabel, '.', document.createElement('br'));
+  const ptsStrong = document.createElement('strong');
+  ptsStrong.textContent = `Points this paragraph: ${pts}`;
+  summary.append(ptsStrong);
   wrap.appendChild(summary);
 
   const isLast = ctx.session.paragraphs.length === 4;
@@ -559,21 +573,12 @@ function renderRightPanel(ctx: PlayCtx): HTMLElement {
     ${ctx.scenario.rulesOfCorrespondence.map((r) => `<p>${r.description}</p>`).join('') || '<p>None.</p>'}`;
   panel.appendChild(scenarioBox);
 
-  // running score
-  const totals = ctx.session.paragraphs.reduce<{ pts: number }>(
-    (acc, p) => {
-      const isSuperior = countSuccesses(p.languageRoll) > 0;
-      const flourishApplied =
-        p.attemptedFlourish && p.heartRoll !== null && countSuccesses(p.heartRoll) > 0;
-      let pts = isSuperior ? (flourishApplied ? 2 : 1) : flourishApplied ? -1 : 0;
-      if (countSuccesses(p.penmanshipRoll) > 0) pts += 1;
-      return { pts: acc.pts + pts };
-    },
-    { pts: 0 },
-  );
+  const total = ctx.session.paragraphs.reduce((acc, p) => acc + paragraphPoints(p), 0);
   const scoreLine = document.createElement('p');
   scoreLine.className = 'running-score';
-  scoreLine.innerHTML = `<strong>Running score: ${totals.pts}</strong> (after ${ctx.session.paragraphs.length}/5)`;
+  const strong = document.createElement('strong');
+  strong.textContent = `Running score: ${total}`;
+  scoreLine.append(strong, ` (after ${ctx.session.paragraphs.length}/5)`);
   panel.appendChild(scoreLine);
 
   return panel;

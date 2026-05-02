@@ -61,10 +61,6 @@ function mount(scenarios: Scenario[]) {
         renderPlay({
           session,
           scenario,
-          onFinish: () =>
-            store.set((s) => ({
-              session: s.session ? { ...s.session, status: 'finished' as const } : null,
-            })),
           onUpdate: (updater) =>
             store.set((s) => ({ session: s.session ? updater(s.session) : null })),
         }),

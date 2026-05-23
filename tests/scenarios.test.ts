@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { validateScenario } from '../src/scenarios';
+import { loadScenarios, validateScenario } from '../src/scenarios';
 
 describe('validateScenario', () => {
   const valid = {
@@ -46,18 +46,11 @@ describe('validateScenario', () => {
   });
 });
 
-describe('loadScenarios (integration with public/scenarios)', () => {
-  test('loads all 4 rulebook scenarios from disk via fs (no fetch needed in test)', async () => {
-    const fs = await import('node:fs/promises');
-    const manifest = JSON.parse(
-      await fs.readFile('public/scenarios/manifest.json', 'utf-8'),
-    ) as string[];
-    const ids: string[] = [];
-    for (const f of manifest) {
-      const raw: unknown = JSON.parse(await fs.readFile(`public/scenarios/${f}`, 'utf-8'));
-      const scenario = validateScenario(raw);
-      ids.push(scenario.id);
-    }
-    expect(ids.sort()).toEqual(['archduke', 'art-dealer', 'father', 'king']);
+describe('loadScenarios', () => {
+  test('loads and validates all 4 bundled rulebook scenarios', () => {
+    const ids = loadScenarios()
+      .map((s) => s.id)
+      .sort();
+    expect(ids).toEqual(['archduke', 'art-dealer', 'father', 'king']);
   });
 });

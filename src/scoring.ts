@@ -1,6 +1,6 @@
 import { countSuccesses } from './dice';
-import { TIER_NAMES } from './types';
 import type { ConsequenceTier, GameSession, Paragraph, Scenario, TierName } from './types';
+import { TIER_NAMES } from './types';
 
 export interface ScoreResult {
   paragraphs: number[];

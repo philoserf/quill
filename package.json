@@ -6,11 +6,17 @@
     "dev": "bun ./public/index.html",
     "build": "bun build ./public/index.html --outdir dist",
     "test": "bun test",
-    "check": "biome check --write ."
+    "check": "biome check --write .",
+    "check:ci": "biome check . && tsc --noEmit && bun test",
+    "prepare": "simple-git-hooks"
+  },
+  "simple-git-hooks": {
+    "pre-push": "bun run check:ci"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.15",
     "@types/bun": "latest",
+    "simple-git-hooks": "^2.13.1",
     "typescript": "^5.5.0"
   }
 }

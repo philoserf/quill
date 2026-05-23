@@ -5,17 +5,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```sh
-bun install
-bun run dev        # http://localhost:3000 — Bun serves public/index.html and bundles src/ on the fly
-bun test           # runs everything in tests/
+bun install         # also runs `simple-git-hooks` to install the pre-push hook
+bun run dev         # http://localhost:3000 — Bun serves public/index.html and bundles src/ on the fly
+bun test            # runs everything in tests/
 bun test tests/scoring.test.ts          # single file
 bun test -t "paragraphPoints"           # by test name
-bun run check      # biome check --write (format + lint, applies fixes)
-bunx tsc --noEmit  # type-check (CI runs this; no bun script for it)
-bun run build      # bundle to dist/ via `bun build ./public/index.html`
+bun run check       # biome check --write (format + lint, applies fixes)
+bun run check:ci    # biome check + tsc --noEmit + bun test — non-mutating; matches CI and pre-push hook
+bun run build       # bundle to dist/ via `bun build ./public/index.html`
 ```
 
-CI (`.github/workflows/deploy.yml`) runs `bun test`, `biome check`, `tsc --noEmit`, then `bun run build`, and deploys `dist/` to GitHub Pages on push to `main`.
+`git push` runs `bun run check:ci` via a `simple-git-hooks` pre-push hook (config in `package.json`). Bypass with `SKIP_SIMPLE_GIT_HOOKS=1 git push` for emergencies. CI (`.github/workflows/deploy.yml`) runs the same suite and deploys `dist/` to GitHub Pages on push to `main`.
 
 ## Architecture
 

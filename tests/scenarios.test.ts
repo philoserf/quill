@@ -67,6 +67,95 @@ describe('validateScenario', () => {
     expect(() => validateScenario(bad)).toThrow(/description/i);
   });
 
+  test('rejects dice_bonus with non-integer amount', () => {
+    const bad = {
+      ...valid,
+      rulesOfCorrespondence: [
+        { type: 'dice_bonus', attribute: 'heart', amount: 1.5, description: 'x' },
+      ],
+    };
+    expect(() => validateScenario(bad)).toThrow(/positive integer/i);
+  });
+
+  test('rejects dice_bonus with NaN amount', () => {
+    const bad = {
+      ...valid,
+      rulesOfCorrespondence: [
+        { type: 'dice_bonus', attribute: 'heart', amount: Number.NaN, description: 'x' },
+      ],
+    };
+    expect(() => validateScenario(bad)).toThrow(/positive integer/i);
+  });
+
+  test('rejects dice_bonus with zero or negative amount', () => {
+    const bad = {
+      ...valid,
+      rulesOfCorrespondence: [
+        { type: 'dice_bonus', attribute: 'heart', amount: 0, description: 'x' },
+      ],
+    };
+    expect(() => validateScenario(bad)).toThrow(/positive integer/i);
+  });
+
+  test('rejects dice_bonus appliesTo: null', () => {
+    const bad = {
+      ...valid,
+      rulesOfCorrespondence: [
+        {
+          type: 'dice_bonus',
+          attribute: 'heart',
+          amount: 1,
+          appliesTo: null,
+          description: 'x',
+        },
+      ],
+    };
+    expect(() => validateScenario(bad)).toThrow(/appliesTo must be an object/i);
+  });
+
+  test('rejects dice_bonus appliesTo with empty characters array', () => {
+    const bad = {
+      ...valid,
+      rulesOfCorrespondence: [
+        {
+          type: 'dice_bonus',
+          attribute: 'heart',
+          amount: 1,
+          appliesTo: { characters: [] },
+          description: 'x',
+        },
+      ],
+    };
+    expect(() => validateScenario(bad)).toThrow(/at least one id/i);
+  });
+
+  test('rejects dice_bonus appliesTo with unknown character id', () => {
+    const bad = {
+      ...valid,
+      rulesOfCorrespondence: [
+        {
+          type: 'dice_bonus',
+          attribute: 'heart',
+          amount: 1,
+          appliesTo: { characters: ['wizard'] },
+          description: 'x',
+        },
+      ],
+    };
+    expect(() => validateScenario(bad)).toThrow(/unknown id\(s\): wizard/i);
+  });
+
+  test('rejects whitespace-only set field', () => {
+    const bad = { ...valid, set: '   ' };
+    expect(() => validateScenario(bad)).toThrow(/non-empty string/i);
+  });
+
+  test('trims surrounding whitespace from set field', () => {
+    const ok = { ...valid, set: '  Trimmed Set  ' };
+    const result = validateScenario(ok);
+    expect(result.set).toBe('Trimmed Set');
+  });
+
   test('rejects empty inkPot', () => {
     const bad = { ...valid, inkPot: [] };
     expect(() => validateScenario(bad)).toThrow(/inkPot/i);

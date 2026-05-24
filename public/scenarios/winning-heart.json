@@ -30,7 +30,7 @@
   "consequences": [
     {
       "threshold": 0,
-      "text": "You are visited by Francis' personal aid who tells you to stop your harassing correspondence or there will be trouble."
+      "text": "You are visited by Francis' personal aide who tells you to stop your harassing correspondence or there will be trouble."
     },
     {
       "threshold": 5,
@@ -42,7 +42,7 @@
     },
     {
       "threshold": 11,
-      "text": "A personal aid of Francis appears at your door. He says that Francis was overwhelmed by your letter and believes you to be soulmates."
+      "text": "A personal aide of Francis appears at your door. He says that Francis was overwhelmed by your letter and believes you to be soulmates."
     }
   ]
 }

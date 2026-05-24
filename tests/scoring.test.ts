@@ -12,6 +12,7 @@ const consequences: ConsequenceTier[] = [
 const scenario: Scenario = {
   id: 's',
   title: 'S',
+  set: 'Test',
   profile: [],
   rulesOfCorrespondence: [],
   inkPot: [],

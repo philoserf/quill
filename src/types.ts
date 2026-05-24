@@ -1,4 +1,5 @@
-export type Attribute = 'penmanship' | 'language' | 'heart';
+export const ATTRIBUTES = ['penmanship', 'language', 'heart'] as const;
+export type Attribute = (typeof ATTRIBUTES)[number];
 export type Rating = 'poor' | 'average' | 'good';
 
 export interface Character {
@@ -32,6 +33,10 @@ export type Modifier =
       type: 'reroll_highest';
       attribute: Attribute;
       description: string;
+    }
+  | {
+      type: 'narrative';
+      description: string;
     };
 
 export interface ConsequenceTier {
@@ -42,6 +47,7 @@ export interface ConsequenceTier {
 export interface Scenario {
   id: string;
   title: string;
+  set: string;
   profile: string[];
   rulesOfCorrespondence: Modifier[];
   inkPot: InkPotEntry[];

@@ -17,10 +17,17 @@ export function renderScore(ctx: ScoreCtx): HTMLElement {
 
   const banner = document.createElement('div');
   banner.className = 'score-banner';
-  banner.innerHTML = `
-    <h2>${ctx.scenario.title}</h2>
-    <p class="score-total">Final score: <strong>${result.total}</strong> — ${result.tierName}</p>
-    <p class="consequence">${result.tier.text}</p>`;
+  const bannerTitle = document.createElement('h2');
+  bannerTitle.textContent = ctx.scenario.title;
+  const totalLine = document.createElement('p');
+  totalLine.className = 'score-total';
+  const totalStrong = document.createElement('strong');
+  totalStrong.textContent = String(result.total);
+  totalLine.append('Final score: ', totalStrong, ` — ${result.tierName}`);
+  const consequenceLine = document.createElement('p');
+  consequenceLine.className = 'consequence';
+  consequenceLine.textContent = result.tier.text;
+  banner.append(bannerTitle, totalLine, consequenceLine);
   root.appendChild(banner);
 
   const letterCard = document.createElement('article');
@@ -34,31 +41,49 @@ export function renderScore(ctx: ScoreCtx): HTMLElement {
 
   const breakdown = document.createElement('details');
   breakdown.className = 'breakdown';
-  const breakdownRows = ctx.session.paragraphs
-    .map((p, i) => {
-      const pair = ctx.scenario.inkPot[p.inkPotIndex];
-      const sup = p.languageRoll.some((d) => d >= 5);
-      const word = pair
-        ? `${sup ? pair.superior : pair.inferior} (${sup ? 'superior' : 'inferior'})`
-        : '—';
-      const flourish = p.attemptedFlourish && p.flourishAdjective ? p.flourishAdjective : '—';
-      return `<tr>
-          <td>${i + 1}</td>
-          <td>${word}</td>
-          <td>${flourish}</td>
-          <td>${p.heartRoll?.join(',') ?? '—'}</td>
-          <td>${p.languageRoll.join(',')}</td>
-          <td>${p.penmanshipRoll.join(',')}</td>
-          <td>${result.paragraphs[i] ?? 0}</td>
-        </tr>`;
-    })
-    .join('');
-  breakdown.innerHTML = `
-    <summary>Per-paragraph breakdown</summary>
-    <table class="breakdown-table">
-      <thead><tr><th>#</th><th>Word</th><th>Flourish</th><th>Heart</th><th>Language</th><th>Penmanship</th><th>Points</th></tr></thead>
-      <tbody>${breakdownRows}</tbody>
-    </table>`;
+  const summary = document.createElement('summary');
+  summary.textContent = 'Per-paragraph breakdown';
+  breakdown.appendChild(summary);
+
+  const table = document.createElement('table');
+  table.className = 'breakdown-table';
+  const thead = document.createElement('thead');
+  const headerRow = document.createElement('tr');
+  for (const label of ['#', 'Word', 'Flourish', 'Heart', 'Language', 'Penmanship', 'Points']) {
+    const th = document.createElement('th');
+    th.textContent = label;
+    headerRow.appendChild(th);
+  }
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+  const tbody = document.createElement('tbody');
+  const rollCell = (values: number[] | null): string =>
+    values && values.length > 0 ? values.join(',') : '—';
+  for (const [i, p] of ctx.session.paragraphs.entries()) {
+    const pair = ctx.scenario.inkPot[p.inkPotIndex];
+    const sup = p.languageRoll.some((d) => d >= 5);
+    const word = pair
+      ? `${sup ? pair.superior : pair.inferior} (${sup ? 'superior' : 'inferior'})`
+      : '—';
+    const flourish = p.attemptedFlourish && p.flourishAdjective ? p.flourishAdjective : '—';
+    const row = document.createElement('tr');
+    for (const cell of [
+      String(i + 1),
+      word,
+      flourish,
+      rollCell(p.heartRoll),
+      rollCell(p.languageRoll),
+      rollCell(p.penmanshipRoll),
+      String(result.paragraphs[i] ?? 0),
+    ]) {
+      const td = document.createElement('td');
+      td.textContent = cell;
+      row.appendChild(td);
+    }
+    tbody.appendChild(row);
+  }
+  table.appendChild(tbody);
+  breakdown.appendChild(table);
   root.appendChild(breakdown);
 
   const actions = document.createElement('div');

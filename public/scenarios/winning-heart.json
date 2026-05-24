@@ -1,0 +1,48 @@
+{
+  "id": "winning-heart",
+  "title": "Winning a Heart",
+  "set": "Love Letters",
+  "profile": [
+    "You are corresponding with Francis Fletcher, an aristocrat who has the eye of many in the land. Francis is refined, intelligent and well-to-do, but does not suffer fools lightly.",
+    "Despite being famously fickle, you are determined to win Francis over with a perfectly-penned letter from the heart (without looking like an idiot)."
+  ],
+  "rulesOfCorrespondence": [
+    {
+      "type": "dice_bonus",
+      "attribute": "heart",
+      "amount": 1,
+      "appliesTo": { "characters": ["aristocrat"] },
+      "description": "Francis respects wealth. Aristocrats gain an extra die in their Heart skill for this letter."
+    }
+  ],
+  "inkPot": [
+    { "inferior": "Gold", "superior": "Glittering Diamonds" },
+    { "inferior": "Your Body", "superior": "Your Form" },
+    { "inferior": "Play", "superior": "Theatrical Performance" },
+    { "inferior": "Music", "superior": "Symphony" },
+    { "inferior": "Imagine", "superior": "Dream" },
+    { "inferior": "Wine", "superior": "Champagne" },
+    { "inferior": "The King", "superior": "His Royal Highness" },
+    { "inferior": "Wonderful", "superior": "Perfection" },
+    { "inferior": "Painter", "superior": "Artist" },
+    { "inferior": "Dinner", "superior": "Caviar" }
+  ],
+  "consequences": [
+    {
+      "threshold": 0,
+      "text": "You are visited by Francis' personal aid who tells you to stop your harassing correspondence or there will be trouble."
+    },
+    {
+      "threshold": 5,
+      "text": "You receive a reply, but it is not good news. Your letter was one of the best Francis has read this month, but the feelings are not reciprocated."
+    },
+    {
+      "threshold": 8,
+      "text": "Francis writes back, impressed by your letter. Very few people are able to pull off such wonderful language, and Francis wishes to meet with you this week."
+    },
+    {
+      "threshold": 11,
+      "text": "A personal aid of Francis appears at your door. He says that Francis was overwhelmed by your letter and believes you to be soulmates."
+    }
+  ]
+}

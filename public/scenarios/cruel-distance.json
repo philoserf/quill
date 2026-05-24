@@ -1,0 +1,47 @@
+{
+  "id": "cruel-distance",
+  "title": "A Cruel Distance",
+  "set": "Love Letters",
+  "profile": [
+    "You are corresponding with Aubrey Cornish, a bookmaker you met while abroad. After becoming instantly besotted, you had to leave after a month to return to your home country.",
+    "You are writing to explain your feelings and to persuade Aubrey to come to your country to live with you."
+  ],
+  "rulesOfCorrespondence": [
+    {
+      "type": "dice_bonus",
+      "attribute": "penmanship",
+      "amount": 1,
+      "description": "Aubrey is a bookmaker and therefore enjoys well-crafted missives. You will be using your best ink for this letter, giving you an extra Penmanship die."
+    }
+  ],
+  "inkPot": [
+    { "inferior": "Miss you", "superior": "Dying be with you" },
+    { "inferior": "Mountains", "superior": "Peaks of Vandrias" },
+    { "inferior": "Flowers", "superior": "Tulips" },
+    { "inferior": "Want", "superior": "Desire" },
+    { "inferior": "Cold", "superior": "Freezing" },
+    { "inferior": "Books", "superior": "Tomes" },
+    { "inferior": "Gentle", "superior": "Fragile" },
+    { "inferior": "Hold", "superior": "Embrace" },
+    { "inferior": "Marry", "superior": "Be wed" },
+    { "inferior": "Tick you off", "superior": "Offend you" }
+  ],
+  "consequences": [
+    {
+      "threshold": 0,
+      "text": "You receive a response to your letter, explaining that Aubrey could never be with you. Your true love tells you to never write again."
+    },
+    {
+      "threshold": 5,
+      "text": "Aubrey is flattered, but cannot return your love. You receive no more letters."
+    },
+    {
+      "threshold": 8,
+      "text": "You receive a beautiful letter returning your feelings. Aubrey will be moving in the next month to be with you."
+    },
+    {
+      "threshold": 11,
+      "text": "Aubrey is overjoyed with your letter and will not only move within the fortnight, but also wishes to marry you immediately."
+    }
+  ]
+}

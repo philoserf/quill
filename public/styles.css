@@ -31,6 +31,14 @@ body {
   padding: 2rem;
 }
 
+h1,
+h2,
+h3,
+h4,
+h5 {
+  letter-spacing: 0.02em;
+}
+
 .display-heading {
   font-family: var(--display-font);
   font-size: 3rem;
@@ -75,7 +83,8 @@ body {
   border-width: 2px;
   background: var(--parchment-dark);
 }
-.card h3 {
+.card h3,
+.card h4 {
   font-family: var(--display-font);
   margin: 0 0 0.5rem;
 }
@@ -84,6 +93,38 @@ body {
   padding: 0;
   margin: 0.5rem 0 0;
   font-size: 0.9rem;
+}
+
+.scenario-group {
+  margin: 1rem 0 1.5rem;
+}
+.scenario-group + .scenario-group {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px dashed var(--ink-soft);
+}
+.scenario-group__heading {
+  font-family: var(--display-font);
+  font-size: 1.25rem;
+  margin: 0 0 0.75rem;
+  color: var(--ink-soft);
+}
+
+.rule--narrative {
+  font-style: italic;
+  color: var(--ink-soft);
+}
+.rule__badge {
+  display: inline-block;
+  font-style: normal;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--parchment-dark);
+  border: 1px solid var(--ink-soft);
+  padding: 0.05rem 0.4rem;
+  margin-right: 0.25rem;
+  color: var(--ink);
 }
 
 .scenario-detail {
@@ -286,14 +327,6 @@ body {
     radial-gradient(ellipse at top, rgba(255, 255, 255, 0.4), transparent 60%),
     radial-gradient(ellipse at bottom, rgba(0, 0, 0, 0.05), transparent 60%), var(--parchment);
   background-attachment: fixed;
-}
-
-h1,
-h2,
-h3,
-h4,
-h5 {
-  letter-spacing: 0.02em;
 }
 
 .display-heading::after {

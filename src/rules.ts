@@ -17,14 +17,28 @@ export function planRoll(args: {
   let rerollPolicy: 'highest' | null = null;
 
   for (const mod of scenario.rulesOfCorrespondence) {
-    if (mod.attribute !== attribute) continue;
-    if (mod.type === 'dice_bonus') {
-      const restrict = mod.appliesTo?.characters;
-      if (!restrict || restrict.includes(character.id)) {
-        diceCount += mod.amount;
+    switch (mod.type) {
+      case 'dice_bonus': {
+        if (mod.attribute !== attribute) break;
+        const restrict = mod.appliesTo?.characters;
+        if (!restrict || restrict.includes(character.id)) {
+          diceCount += mod.amount;
+        }
+        break;
       }
-    } else if (mod.type === 'reroll_highest') {
-      rerollPolicy = 'highest';
+      case 'reroll_highest': {
+        if (mod.attribute !== attribute) break;
+        rerollPolicy = 'highest';
+        break;
+      }
+      case 'narrative':
+        break;
+      default: {
+        // Compile-time exhaustiveness: TS errors if a new Modifier variant is added.
+        const _exhaustive: never = mod;
+        // Runtime safety: a payload that escaped validation (e.g., tampered session) still fails loudly.
+        throw new Error(`Unhandled modifier: ${JSON.stringify(_exhaustive)}`);
+      }
     }
   }
 

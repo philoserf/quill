@@ -7,6 +7,7 @@ import { must } from './helpers';
 const baseScenario: Scenario = {
   id: 'test',
   title: 'Test',
+  set: 'Test',
   profile: [],
   rulesOfCorrespondence: [],
   inkPot: [],
@@ -132,6 +133,25 @@ describe('planRoll', () => {
       scenario,
       skillBonusActive: false,
     });
+    expect(plan.rerollPolicy).toBeNull();
+  });
+
+  test('narrative modifier is ignored by planRoll', () => {
+    const monk = must(characterById('monk'), 'monk fixture');
+    const scenario: Scenario = {
+      ...baseScenario,
+      rulesOfCorrespondence: [
+        { type: 'narrative', description: 'Player-enforced: do not use any skills.' },
+      ],
+    };
+    const plan = planRoll({
+      attribute: 'penmanship',
+      character: monk,
+      scenario,
+      skillBonusActive: false,
+    });
+    // Monk: penmanship=good → 3 dice; narrative modifier does not alter dice count
+    expect(plan.diceCount).toBe(3);
     expect(plan.rerollPolicy).toBeNull();
   });
 });

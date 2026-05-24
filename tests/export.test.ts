@@ -7,6 +7,7 @@ import { must } from './helpers';
 const scenario: Scenario = {
   id: 'archduke',
   title: 'The Archduke',
+  set: 'Quill Rulebook',
   profile: [],
   rulesOfCorrespondence: [],
   inkPot: [

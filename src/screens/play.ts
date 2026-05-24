@@ -569,11 +569,38 @@ function renderRightPanel(ctx: PlayCtx): HTMLElement {
 
   const scenarioBox = document.createElement('div');
   scenarioBox.className = 'scenario-box';
-  scenarioBox.innerHTML = `
-    <h4>${ctx.scenario.title}</h4>
-    ${ctx.scenario.profile.map((p) => `<p>${p}</p>`).join('')}
-    <h5>Rules of Correspondence</h5>
-    ${ctx.scenario.rulesOfCorrespondence.map((r) => `<p>${r.description}</p>`).join('') || '<p>None.</p>'}`;
+
+  const titleEl = document.createElement('h4');
+  titleEl.textContent = ctx.scenario.title;
+  scenarioBox.appendChild(titleEl);
+  for (const p of ctx.scenario.profile) {
+    const para = document.createElement('p');
+    para.textContent = p;
+    scenarioBox.appendChild(para);
+  }
+  const rulesHeading = document.createElement('h5');
+  rulesHeading.textContent = 'Rules of Correspondence';
+  scenarioBox.appendChild(rulesHeading);
+  if (ctx.scenario.rulesOfCorrespondence.length === 0) {
+    const none = document.createElement('p');
+    none.textContent = 'None.';
+    scenarioBox.appendChild(none);
+  } else {
+    for (const r of ctx.scenario.rulesOfCorrespondence) {
+      const para = document.createElement('p');
+      if (r.type === 'narrative') {
+        para.className = 'rule rule--narrative';
+        const badge = document.createElement('span');
+        badge.className = 'rule__badge';
+        badge.textContent = 'Player-enforced';
+        para.append(badge, ' ', r.description);
+      } else {
+        para.className = 'rule';
+        para.textContent = r.description;
+      }
+      scenarioBox.appendChild(para);
+    }
+  }
   panel.appendChild(scenarioBox);
 
   const total = ctx.session.paragraphs.reduce((acc, p) => acc + paragraphPoints(p), 0);

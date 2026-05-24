@@ -1,0 +1,45 @@
+{
+  "id": "making-amends",
+  "title": "Making Amends",
+  "set": "Love Letters",
+  "profile": [
+    "You are corresponding with Emery Penderghast, an ex-lover who left you a month ago after deciding that you weren't committed to the relationship.",
+    "You are writing to win back Emery and to explain that you have changed and are more committed than ever. You need to persuade Emery that you both have a future and give examples as to how your life is without your love."
+  ],
+  "rulesOfCorrespondence": [
+    {
+      "type": "narrative",
+      "description": "Emery likes when people are straightforward with their correspondence. You are unable to use any skills in this letter."
+    }
+  ],
+  "inkPot": [
+    { "inferior": "Face", "superior": "Visage" },
+    { "inferior": "Need", "superior": "Yearn" },
+    { "inferior": "Morning", "superior": "Sunrise" },
+    { "inferior": "Cried", "superior": "Wept" },
+    { "inferior": "Been an idiot", "superior": "Been a fool" },
+    { "inferior": "Cart", "superior": "Carriage" },
+    { "inferior": "Stars", "superior": "Galaxies" },
+    { "inferior": "Sad", "superior": "Devastated" },
+    { "inferior": "Pie-Eyed", "superior": "Besotted" },
+    { "inferior": "Hell", "superior": "Eternal Hellfire" }
+  ],
+  "consequences": [
+    {
+      "threshold": 0,
+      "text": "Emery writes back, believing that you are worse than ever and that there is no hint of sincerity in your writing. You receive no further correspondence."
+    },
+    {
+      "threshold": 5,
+      "text": "Emery's heart is softened by your words, but cannot be with you. Emery is happy to be friends with you."
+    },
+    {
+      "threshold": 8,
+      "text": "You receive a heartfelt letter from Emery, admitting that you have changed and that you both should meet by the fountain on Monday evening to rekindle your love."
+    },
+    {
+      "threshold": 11,
+      "text": "You receive no correspondence. Instead, a few days after sending, you receive a knock at your door. Emery stands there and you both embrace. You marry within the month."
+    }
+  ]
+}

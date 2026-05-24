@@ -37,6 +37,7 @@ export function toMarkdown(
     `character: ${character.name}`,
     `skill: ${skill.name}`,
     `scenario: ${scenario.title}`,
+    `set: ${scenario.set}`,
     `score: ${result.total}`,
     `consequence: ${result.tierName}`,
     '---',

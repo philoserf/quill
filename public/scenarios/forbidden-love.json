@@ -1,0 +1,45 @@
+{
+  "id": "forbidden-love",
+  "title": "Forbidden Love",
+  "set": "Love Letters",
+  "profile": [
+    "You are corresponding with Florence Payne, whose mother is Lady Bethany Payne, an influential courtier. She is protective and does not allow anyone to see Florence in a romantic way. However, you have caught Florence's eye and have been sneaking around for the past few months.",
+    "You are besotted with Florence and you wish to propose in a letter. However, you may have to contend with Lady Bethany if the letter is too obviously declaring your love for Florence. Instead, you must be clever with your language and never directly allude to a proposal, just in case Lady Bethany intercepts the letter."
+  ],
+  "rulesOfCorrespondence": [
+    {
+      "type": "narrative",
+      "description": "You will have to write this letter in a sly code, that only Florence will understand. Roll an extra Penmanship test at the end of the letter. If this succeeds, gain an extra 2 points. If it fails, reduce your total by 2 points."
+    }
+  ],
+  "inkPot": [
+    { "inferior": "Lawn", "superior": "Garden" },
+    { "inferior": "Dogs", "superior": "Hounds" },
+    { "inferior": "White", "superior": "Ivory" },
+    { "inferior": "Duck", "superior": "Swan" },
+    { "inferior": "Shining", "superior": "Glimmering" },
+    { "inferior": "Wellborn", "superior": "Noble" },
+    { "inferior": "Toss", "superior": "Throw" },
+    { "inferior": "Smell", "superior": "Scent" },
+    { "inferior": "Pig", "superior": "Sow" },
+    { "inferior": "Cherub", "superior": "Angel" }
+  ],
+  "consequences": [
+    {
+      "threshold": 0,
+      "text": "You receive an angry letter from Lady Bethany telling you to refrain from any more correspondence. She has placed more guards outside her estate and has ordered them to shoot on sight if they see you."
+    },
+    {
+      "threshold": 5,
+      "text": "Florence responds, but is confused about your letter, so does not acknowledge your proposal."
+    },
+    {
+      "threshold": 8,
+      "text": "Florence agrees to marry you and is impressed with your clever letter."
+    },
+    {
+      "threshold": 11,
+      "text": "Florence will marry you, and after showing the exceptional way you proposed, even Lady Bethany softens to your union."
+    }
+  ]
+}

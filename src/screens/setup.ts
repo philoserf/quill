@@ -63,14 +63,27 @@ function renderCharacterStep(state: SetupState, onChange: () => void): HTMLEleme
     const card = document.createElement('button');
     card.type = 'button';
     card.className = `card${state.characterId === c.id ? ' card--selected' : ''}`;
-    card.innerHTML = `
-      <h3>${c.name}</h3>
-      <p>${c.flavor[0] ?? ''}</p>
-      <ul class="attrs">
-        <li>Penmanship: <strong>${c.attributes.penmanship}</strong></li>
-        <li>Language: <strong>${c.attributes.language}</strong></li>
-        <li>Heart: <strong>${c.attributes.heart}</strong></li>
-      </ul>`;
+
+    const heading = document.createElement('h3');
+    heading.textContent = c.name;
+    const blurb = document.createElement('p');
+    blurb.textContent = c.flavor[0] ?? '';
+    const attrs = document.createElement('ul');
+    attrs.className = 'attrs';
+    for (const [label, rating] of [
+      ['Penmanship', c.attributes.penmanship],
+      ['Language', c.attributes.language],
+      ['Heart', c.attributes.heart],
+    ] as const) {
+      const li = document.createElement('li');
+      li.append(`${label}: `);
+      const strong = document.createElement('strong');
+      strong.textContent = rating;
+      li.appendChild(strong);
+      attrs.appendChild(li);
+    }
+    card.append(heading, blurb, attrs);
+
     card.addEventListener('click', () => {
       state.characterId = c.id;
       onChange();
@@ -93,7 +106,11 @@ function renderSkillStep(state: SetupState, onChange: () => void): HTMLElement {
     const card = document.createElement('button');
     card.type = 'button';
     card.className = `card${state.skillId === s.id ? ' card--selected' : ''}`;
-    card.innerHTML = `<h3>${s.name}</h3><p>${s.description}</p>`;
+    const heading = document.createElement('h3');
+    heading.textContent = s.name;
+    const desc = document.createElement('p');
+    desc.textContent = s.description;
+    card.append(heading, desc);
     card.addEventListener('click', () => {
       state.skillId = s.id;
       onChange();
@@ -114,32 +131,88 @@ function renderScenarioStep(
   const h = document.createElement('h2');
   h.textContent = '3. Choose your Scenario';
   wrap.appendChild(h);
-  const grid = document.createElement('div');
-  grid.className = 'card-grid';
+
+  const grouped = new Map<string, Scenario[]>();
   for (const sc of scenarios) {
-    const card = document.createElement('button');
-    card.type = 'button';
-    card.className = `card${state.scenarioId === sc.id ? ' card--selected' : ''}`;
-    card.innerHTML = `<h3>${sc.title}</h3><p>${sc.profile[0] ?? ''}</p>`;
-    card.addEventListener('click', () => {
-      state.scenarioId = sc.id;
-      onChange();
-    });
-    grid.appendChild(card);
+    const list = grouped.get(sc.set) ?? [];
+    list.push(sc);
+    grouped.set(sc.set, list);
   }
-  wrap.appendChild(grid);
+  // Deterministic group order: rulebook first, then supplements alphabetically.
+  const SET_ORDER = ['Quill Rulebook'];
+  const orderedSets = [
+    ...SET_ORDER.filter((s) => grouped.has(s)),
+    ...[...grouped.keys()].filter((s) => !SET_ORDER.includes(s)).sort(),
+  ];
+  for (const setName of orderedSets) {
+    const list = grouped.get(setName);
+    if (!list) continue;
+    const group = document.createElement('div');
+    group.className = 'scenario-group';
+    const groupHeading = document.createElement('h3');
+    groupHeading.className = 'scenario-group__heading';
+    groupHeading.textContent = setName;
+    group.appendChild(groupHeading);
+    const grid = document.createElement('div');
+    grid.className = 'card-grid';
+    for (const sc of list) {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = `card${state.scenarioId === sc.id ? ' card--selected' : ''}`;
+      const heading = document.createElement('h4');
+      heading.textContent = sc.title;
+      const blurb = document.createElement('p');
+      blurb.textContent = sc.profile[0] ?? '';
+      card.append(heading, blurb);
+      card.addEventListener('click', () => {
+        state.scenarioId = sc.id;
+        onChange();
+      });
+      grid.appendChild(card);
+    }
+    group.appendChild(grid);
+    wrap.appendChild(group);
+  }
 
   if (state.scenarioId) {
     const sc = scenarios.find((x) => x.id === state.scenarioId);
     if (sc) {
       const detail = document.createElement('div');
       detail.className = 'scenario-detail';
-      detail.innerHTML = `
-        <h4>Profile</h4>
-        ${sc.profile.map((p) => `<p>${p}</p>`).join('')}
-        <h4>Rules of Correspondence</h4>
-        ${sc.rulesOfCorrespondence.map((r) => `<p>${r.description}</p>`).join('') || '<p>None.</p>'}
-      `;
+
+      const profileHeading = document.createElement('h4');
+      profileHeading.textContent = 'Profile';
+      detail.appendChild(profileHeading);
+      for (const p of sc.profile) {
+        const para = document.createElement('p');
+        para.textContent = p;
+        detail.appendChild(para);
+      }
+
+      const rulesHeading = document.createElement('h4');
+      rulesHeading.textContent = 'Rules of Correspondence';
+      detail.appendChild(rulesHeading);
+      if (sc.rulesOfCorrespondence.length === 0) {
+        const none = document.createElement('p');
+        none.textContent = 'None.';
+        detail.appendChild(none);
+      } else {
+        for (const r of sc.rulesOfCorrespondence) {
+          const para = document.createElement('p');
+          if (r.type === 'narrative') {
+            para.className = 'rule rule--narrative';
+            const badge = document.createElement('span');
+            badge.className = 'rule__badge';
+            badge.textContent = 'Player-enforced';
+            para.append(badge, ' ', r.description);
+          } else {
+            para.className = 'rule';
+            para.textContent = r.description;
+          }
+          detail.appendChild(para);
+        }
+      }
+
       wrap.appendChild(detail);
     }
   }

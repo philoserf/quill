@@ -1,3 +1,4 @@
+import { CHARACTERS, SKILLS } from './data';
 import { loadScenarios } from './scenarios';
 import { renderPlay } from './screens/play';
 import { renderScore } from './screens/score';
@@ -50,8 +51,10 @@ function mount(scenarios: Scenario[]) {
     }
 
     const scenario = scenarios.find((s) => s.id === session.scenarioId);
-    if (!scenario) {
-      // Stale session referencing missing scenario → reset.
+    const character = CHARACTERS.find((c) => c.id === session.characterId);
+    const skill = SKILLS.find((s) => s.id === session.skillId);
+    if (!scenario || !character || !skill) {
+      // Stale session referencing renamed/removed character, skill, or scenario → reset.
       store.clear({ session: null });
       return;
     }

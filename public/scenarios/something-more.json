@@ -1,0 +1,47 @@
+{
+  "id": "something-more",
+  "title": "Something More",
+  "set": "Love Letters",
+  "profile": [
+    "You are corresponding with Rowan Godfrey, an old friend who you have grown more fond of recently, to the point that you wish to declare your love.",
+    "The line of friend and lover can be a precarious one and you do not wish to lose Rowan as a friend."
+  ],
+  "rulesOfCorrespondence": [
+    {
+      "type": "dice_bonus",
+      "attribute": "language",
+      "amount": 1,
+      "description": "You know Rowan very well, so gain an extra die in Language for this letter."
+    }
+  ],
+  "inkPot": [
+    { "inferior": "Chums", "superior": "Friends" },
+    { "inferior": "Scare you", "superior": "Concern you" },
+    { "inferior": "Always", "superior": "Eternal" },
+    { "inferior": "Ocean", "superior": "Seven Seas" },
+    { "inferior": "Sadness", "superior": "Gloom" },
+    { "inferior": "Companions", "superior": "Soul Mates" },
+    { "inferior": "Song", "superior": "Ballad" },
+    { "inferior": "Affection", "superior": "Passion" },
+    { "inferior": "Doomed", "superior": "Ill-fated" },
+    { "inferior": "Flame", "superior": "Inferno" }
+  ],
+  "consequences": [
+    {
+      "threshold": 0,
+      "text": "You receive a letter saying that Rowan is leaving the country, although it doesn't mention a reason. You receive no further correspondence."
+    },
+    {
+      "threshold": 5,
+      "text": "You receive a reply, but Rowan just wants to remain friends. You soon grow apart, but see each other on occasion, although it is awkward."
+    },
+    {
+      "threshold": 8,
+      "text": "Rowan writes a relieved letter explaining that the feelings are mutual."
+    },
+    {
+      "threshold": 11,
+      "text": "Rowan is ecstatic and immediately begins planning a wedding."
+    }
+  ]
+}

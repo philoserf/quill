@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(obsidian vault=notes open *)",
+      "mcp__apple-eventkit__calendar_list_events",
+      "Bash(claude --version)",
+      "Bash(claude mcp list)",
+      "Bash(prettier --version)",
+      "Bash(gh label list *)",
+      "Bash(task check)"
+    ]
+  }
+}

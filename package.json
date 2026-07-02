@@ -8,6 +8,7 @@
     "test": "bun test",
     "check": "biome check --write .",
     "check:ci": "biome check . && tsc --noEmit && bun test",
+    "format": "biome format --write .",
     "prepare": "simple-git-hooks"
   },
   "simple-git-hooks": {

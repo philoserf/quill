@@ -90,11 +90,11 @@ input[type="text"] {
   background: var(--paper-side);
 }
 
-.paper:nth-of-type(odd) {
+.paper:nth-child(odd) {
   transform: rotate(0.3deg);
 }
 
-.paper:nth-of-type(even) {
+.paper:nth-child(even) {
   transform: rotate(-0.3deg);
 }
 

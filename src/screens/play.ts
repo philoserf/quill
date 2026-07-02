@@ -81,8 +81,8 @@ function ordinalSuffix(day: number): string {
 
 function formatOrdinalDate(iso: string): string {
   const d = new Date(iso);
-  const day = d.getDate();
-  const month = d.toLocaleString('en-US', { month: 'long' });
+  const day = d.getUTCDate();
+  const month = d.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
   return `Written this ${day}${ordinalSuffix(day)} day of ${month}`;
 }
 

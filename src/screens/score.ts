@@ -25,8 +25,8 @@ function ordinalSuffix(day: number): string {
 
 function formatOrdinalDate(iso: string): string {
   const d = new Date(iso);
-  const day = d.getDate();
-  const month = d.toLocaleString('en-US', { month: 'long' });
+  const day = d.getUTCDate();
+  const month = d.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
   return `Written this ${day}${ordinalSuffix(day)} day of ${month}`;
 }
 
@@ -105,12 +105,13 @@ export function renderScore(ctx: ScoreCtx): HTMLElement {
   for (const [i, p] of ctx.session.paragraphs.entries()) {
     const pair = ctx.scenario.inkPot[p.inkPotIndex];
     const sup = p.languageRoll.some((d) => d >= 5);
-    const flourishApplied = p.attemptedFlourish && p.heartRoll?.some((d) => d >= 5);
+    const flourish = p.flourishAdjective;
+    const flourishApplied = flourish !== null && p.heartRoll?.some((d) => d >= 5);
     let word = pair
       ? `"${sup ? pair.superior : pair.inferior}" (${sup ? 'superior' : 'inferior'})`
       : '—';
     if (p.attemptedFlourish) {
-      word += flourishApplied ? ` + "${p.flourishAdjective}"` : ' — flourish lost';
+      word += flourishApplied && flourish !== null ? ` + "${flourish}"` : ' — flourish lost';
     }
     const penOk = p.penmanshipRoll.some((d) => d >= 5);
     const hand = penOk ? 'Fine hand' : 'Plain hand';

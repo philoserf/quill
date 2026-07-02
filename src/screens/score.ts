@@ -9,6 +9,31 @@ export interface ScoreCtx {
   onRestart: () => void;
 }
 
+function ordinalSuffix(day: number): string {
+  if (day >= 11 && day <= 13) return 'th';
+  switch (day % 10) {
+    case 1:
+      return 'st';
+    case 2:
+      return 'nd';
+    case 3:
+      return 'rd';
+    default:
+      return 'th';
+  }
+}
+
+function formatOrdinalDate(iso: string): string {
+  const d = new Date(iso);
+  const day = d.getDate();
+  const month = d.toLocaleString('en-US', { month: 'long' });
+  return `Written this ${day}${ordinalSuffix(day)} day of ${month}`;
+}
+
+function withIndefiniteArticle(word: string): string {
+  return /^[aeiou]/i.test(word) ? `An ${word}` : `A ${word}`;
+}
+
 export function renderScore(ctx: ScoreCtx): HTMLElement {
   const root = document.createElement('section');
   root.className = 'screen screen--score';
@@ -17,39 +42,59 @@ export function renderScore(ctx: ScoreCtx): HTMLElement {
 
   const banner = document.createElement('div');
   banner.className = 'score-banner';
-  const bannerTitle = document.createElement('h2');
-  bannerTitle.textContent = ctx.scenario.title;
-  const totalLine = document.createElement('p');
-  totalLine.className = 'score-total';
-  const totalStrong = document.createElement('strong');
-  totalStrong.textContent = String(result.total);
-  totalLine.append('Final score: ', totalStrong, ` — ${result.tierName}`);
+  const seal = document.createElement('div');
+  seal.className = 'score-seal';
+  const sealStrong = document.createElement('strong');
+  sealStrong.textContent = String(result.total);
+  seal.appendChild(sealStrong);
+  const tierName = document.createElement('p');
+  tierName.className = 'score-tier';
+  tierName.textContent = `${withIndefiniteArticle(result.tierName)} letter`;
   const consequenceLine = document.createElement('p');
   consequenceLine.className = 'consequence';
   consequenceLine.textContent = result.tier.text;
-  banner.append(bannerTitle, totalLine, consequenceLine);
+  banner.append(seal, tierName, consequenceLine);
   root.appendChild(banner);
 
   const letterCard = document.createElement('article');
-  letterCard.className = 'finished-letter';
+  letterCard.className = 'finished-letter paper';
+  const head = document.createElement('div');
+  head.className = 'letterhead';
+  const title = document.createElement('p');
+  title.className = 'letterhead__title';
+  title.textContent = ctx.scenario.title;
+  const date = document.createElement('p');
+  date.className = 'letterhead__date';
+  date.textContent = formatOrdinalDate(ctx.session.startedAt);
+  head.append(title, date);
+  letterCard.appendChild(head);
   for (const p of ctx.session.paragraphs) {
     const para = document.createElement('p');
+    para.className = 'letter-paragraph';
     para.textContent = p.text;
     letterCard.appendChild(para);
   }
+  const signature = document.createElement('div');
+  signature.className = 'signature-row';
+  const signatureText = document.createElement('span');
+  signatureText.textContent = '— The Poet';
+  const sealDot = document.createElement('span');
+  sealDot.className = 'seal-dot';
+  signature.append(signatureText, sealDot);
+  letterCard.appendChild(signature);
   root.appendChild(letterCard);
 
-  const breakdown = document.createElement('details');
-  breakdown.className = 'breakdown';
-  const summary = document.createElement('summary');
-  summary.textContent = 'Per-paragraph breakdown';
-  breakdown.appendChild(summary);
+  const breakdown = document.createElement('section');
+  breakdown.className = 'breakdown paper';
+  const breakdownHeading = document.createElement('h4');
+  breakdownHeading.textContent = 'The reckoning, paragraph by paragraph';
+  breakdown.appendChild(breakdownHeading);
 
   const table = document.createElement('table');
   table.className = 'breakdown-table';
   const thead = document.createElement('thead');
   const headerRow = document.createElement('tr');
-  for (const label of ['#', 'Word', 'Flourish', 'Heart', 'Language', 'Penmanship', 'Points']) {
+  for (const label of ['No.', 'Word & flourish', 'Hand', 'Points']) {
     const th = document.createElement('th');
     th.textContent = label;
     headerRow.appendChild(th);
@@ -57,25 +102,21 @@ export function renderScore(ctx: ScoreCtx): HTMLElement {
   thead.appendChild(headerRow);
   table.appendChild(thead);
   const tbody = document.createElement('tbody');
-  const rollCell = (values: number[] | null): string =>
-    values && values.length > 0 ? values.join(',') : '—';
   for (const [i, p] of ctx.session.paragraphs.entries()) {
     const pair = ctx.scenario.inkPot[p.inkPotIndex];
     const sup = p.languageRoll.some((d) => d >= 5);
-    const word = pair
-      ? `${sup ? pair.superior : pair.inferior} (${sup ? 'superior' : 'inferior'})`
+    const flourishApplied = p.attemptedFlourish && p.heartRoll?.some((d) => d >= 5);
+    let word = pair
+      ? `"${sup ? pair.superior : pair.inferior}" (${sup ? 'superior' : 'inferior'})`
       : '—';
-    const flourish = p.attemptedFlourish && p.flourishAdjective ? p.flourishAdjective : '—';
+    if (p.attemptedFlourish) {
+      word += flourishApplied ? ` + "${p.flourishAdjective}"` : ' — flourish lost';
+    }
+    const penOk = p.penmanshipRoll.some((d) => d >= 5);
+    const hand = penOk ? 'Fine hand' : 'Plain hand';
+
     const row = document.createElement('tr');
-    for (const cell of [
-      String(i + 1),
-      word,
-      flourish,
-      rollCell(p.heartRoll),
-      rollCell(p.languageRoll),
-      rollCell(p.penmanshipRoll),
-      String(result.paragraphs[i] ?? 0),
-    ]) {
+    for (const cell of [String(i + 1), word, hand, String(result.paragraphs[i] ?? 0)]) {
       const td = document.createElement('td');
       td.textContent = cell;
       row.appendChild(td);

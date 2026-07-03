@@ -1,4 +1,5 @@
 import { CHARACTERS, SKILLS } from '../data';
+import { countSuccesses } from '../dice';
 import { toMarkdown } from '../export';
 import { score } from '../scoring';
 import type { GameSession, Scenario } from '../types';
@@ -23,10 +24,12 @@ function ordinalSuffix(day: number): string {
   }
 }
 
+// Local time on purpose: the letterhead should read as the player's calendar
+// day, even though startedAt is stored (and the export filename derived) in UTC.
 function formatOrdinalDate(iso: string): string {
   const d = new Date(iso);
-  const day = d.getUTCDate();
-  const month = d.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+  const day = d.getDate();
+  const month = d.toLocaleString('en-US', { month: 'long' });
   return `Written this ${day}${ordinalSuffix(day)} day of ${month}`;
 }
 
@@ -74,10 +77,11 @@ export function renderScore(ctx: ScoreCtx): HTMLElement {
     para.textContent = p.text;
     letterCard.appendChild(para);
   }
+  const character = CHARACTERS.find((c) => c.id === ctx.session.characterId);
   const signature = document.createElement('div');
   signature.className = 'signature-row';
   const signatureText = document.createElement('span');
-  signatureText.textContent = '— The Poet';
+  signatureText.textContent = `— ${character?.name ?? 'The Correspondent'}`;
   const sealDot = document.createElement('span');
   sealDot.className = 'seal-dot';
   signature.append(signatureText, sealDot);
@@ -104,16 +108,17 @@ export function renderScore(ctx: ScoreCtx): HTMLElement {
   const tbody = document.createElement('tbody');
   for (const [i, p] of ctx.session.paragraphs.entries()) {
     const pair = ctx.scenario.inkPot[p.inkPotIndex];
-    const sup = p.languageRoll.some((d) => d >= 5);
+    const sup = countSuccesses(p.languageRoll) > 0;
     const flourish = p.flourishAdjective;
-    const flourishApplied = flourish !== null && p.heartRoll?.some((d) => d >= 5);
+    const flourishApplied =
+      flourish !== null && p.heartRoll !== null && countSuccesses(p.heartRoll) > 0;
     let word = pair
       ? `"${sup ? pair.superior : pair.inferior}" (${sup ? 'superior' : 'inferior'})`
       : '—';
     if (p.attemptedFlourish) {
       word += flourishApplied && flourish !== null ? ` + "${flourish}"` : ' — flourish lost';
     }
-    const penOk = p.penmanshipRoll.some((d) => d >= 5);
+    const penOk = countSuccesses(p.penmanshipRoll) > 0;
     const hand = penOk ? 'Fine hand' : 'Plain hand';
 
     const row = document.createElement('tr');

@@ -1,7 +1,6 @@
 import { CHARACTERS, SKILLS } from '../data';
-import type { Rating, Scenario } from '../types';
-
-const RATING_LEVEL: Record<Rating, number> = { poor: 1, average: 2, good: 3 };
+import { diceForRating } from '../dice';
+import type { Scenario } from '../types';
 
 export interface SetupCtx {
   scenarios: Scenario[];
@@ -101,7 +100,7 @@ function renderCharacterStep(state: SetupState, onChange: () => void): HTMLEleme
       labelEl.textContent = label;
       const pips = document.createElement('span');
       pips.className = 'pips';
-      const level = RATING_LEVEL[rating];
+      const level = diceForRating(rating);
       for (let i = 0; i < 3; i++) {
         const dot = document.createElement('span');
         dot.className = i < level ? 'pip pip--filled' : 'pip';

@@ -456,24 +456,19 @@ button:focus-visible {
   background: rgba(0, 0, 0, 0.03);
 }
 
-.inkpot-item--chosen {
-  color: var(--ink);
-}
-
-.inkpot-item--chosen .small-caps {
+.inkpot-item .small-caps {
   font-size: 0.75rem;
   margin-left: 0.4rem;
+  text-decoration: none;
+}
+
+.inkpot-item--chosen {
+  color: var(--ink);
 }
 
 .inkpot-item--used {
   color: var(--ink-faint);
   text-decoration: line-through;
-}
-
-.inkpot-item--used .small-caps {
-  font-size: 0.75rem;
-  margin-left: 0.4rem;
-  text-decoration: none;
 }
 
 .letter {

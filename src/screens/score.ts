@@ -1,36 +1,13 @@
 import { CHARACTERS, SKILLS } from '../data';
-import { countSuccesses } from '../dice';
 import { toMarkdown } from '../export';
-import { score } from '../scoring';
+import { fineHand, flourishHeld, isSuperior, score } from '../scoring';
 import type { GameSession, Scenario } from '../types';
+import { renderLetterhead } from './letterhead';
 
 export interface ScoreCtx {
   session: GameSession;
   scenario: Scenario;
   onRestart: () => void;
-}
-
-function ordinalSuffix(day: number): string {
-  if (day >= 11 && day <= 13) return 'th';
-  switch (day % 10) {
-    case 1:
-      return 'st';
-    case 2:
-      return 'nd';
-    case 3:
-      return 'rd';
-    default:
-      return 'th';
-  }
-}
-
-// Local time on purpose: the letterhead should read as the player's calendar
-// day, even though startedAt is stored (and the export filename derived) in UTC.
-function formatOrdinalDate(iso: string): string {
-  const d = new Date(iso);
-  const day = d.getDate();
-  const month = d.toLocaleString('en-US', { month: 'long' });
-  return `Written this ${day}${ordinalSuffix(day)} day of ${month}`;
 }
 
 function withIndefiniteArticle(word: string): string {
@@ -61,16 +38,7 @@ export function renderScore(ctx: ScoreCtx): HTMLElement {
 
   const letterCard = document.createElement('article');
   letterCard.className = 'finished-letter paper';
-  const head = document.createElement('div');
-  head.className = 'letterhead';
-  const title = document.createElement('p');
-  title.className = 'letterhead__title';
-  title.textContent = ctx.scenario.title;
-  const date = document.createElement('p');
-  date.className = 'letterhead__date';
-  date.textContent = formatOrdinalDate(ctx.session.startedAt);
-  head.append(title, date);
-  letterCard.appendChild(head);
+  letterCard.appendChild(renderLetterhead(ctx.scenario.title, ctx.session.startedAt));
   for (const p of ctx.session.paragraphs) {
     const para = document.createElement('p');
     para.className = 'letter-paragraph';
@@ -108,17 +76,16 @@ export function renderScore(ctx: ScoreCtx): HTMLElement {
   const tbody = document.createElement('tbody');
   for (const [i, p] of ctx.session.paragraphs.entries()) {
     const pair = ctx.scenario.inkPot[p.inkPotIndex];
-    const sup = countSuccesses(p.languageRoll) > 0;
+    const sup = isSuperior(p.languageRoll);
     const flourish = p.flourishAdjective;
-    const flourishApplied =
-      flourish !== null && p.heartRoll !== null && countSuccesses(p.heartRoll) > 0;
+    const flourishApplied = flourish !== null && flourishHeld(p.attemptedFlourish, p.heartRoll);
     let word = pair
       ? `"${sup ? pair.superior : pair.inferior}" (${sup ? 'superior' : 'inferior'})`
       : '—';
     if (p.attemptedFlourish) {
-      word += flourishApplied && flourish !== null ? ` + "${flourish}"` : ' — flourish lost';
+      word += flourishApplied ? ` + "${flourish}"` : ' — flourish lost';
     }
-    const penOk = countSuccesses(p.penmanshipRoll) > 0;
+    const penOk = fineHand(p.penmanshipRoll);
     const hand = penOk ? 'Fine hand' : 'Plain hand';
 
     const row = document.createElement('tr');

@@ -1,8 +1,9 @@
 import { CHARACTERS, SKILLS } from '../data';
-import { countSuccesses, roll } from '../dice';
+import { isSuccess, roll } from '../dice';
 import { planRoll } from '../rules';
-import { paragraphPoints } from '../scoring';
+import { fineHand, flourishHeld, isSuperior, paragraphPoints } from '../scoring';
 import type { GameSession, Scenario } from '../types';
+import { renderLetterhead } from './letterhead';
 
 export interface PlayCtx {
   session: GameSession;
@@ -65,33 +66,21 @@ function rerender(ctx: PlayCtx) {
   ctx.onUpdate((s) => ({ ...s }));
 }
 
-function ordinalSuffix(day: number): string {
-  if (day >= 11 && day <= 13) return 'th';
-  switch (day % 10) {
-    case 1:
-      return 'st';
-    case 2:
-      return 'nd';
-    case 3:
-      return 'rd';
-    default:
-      return 'th';
-  }
-}
-
-// Local time on purpose: the letterhead should read as the player's calendar
-// day, even though startedAt is stored (and the export filename derived) in UTC.
-function formatOrdinalDate(iso: string): string {
-  const d = new Date(iso);
-  const day = d.getDate();
-  const month = d.toLocaleString('en-US', { month: 'long' });
-  return `Written this ${day}${ordinalSuffix(day)} day of ${month}`;
-}
-
 function formatSignedPoints(pts: number): string {
-  if (pts > 0) return `+${pts}`;
-  if (pts < 0) return `-${Math.abs(pts)}`;
-  return '0';
+  return pts > 0 ? `+${pts}` : String(pts);
+}
+
+function smallCaps(text: string): HTMLElement {
+  const span = document.createElement('span');
+  span.className = 'small-caps';
+  span.textContent = text;
+  return span;
+}
+
+function internalError(msg: string): HTMLElement {
+  const wrap = document.createElement('div');
+  wrap.appendChild(document.createTextNode(msg));
+  return wrap;
 }
 
 function renderDiceRow(values: number[]): HTMLElement {
@@ -99,7 +88,7 @@ function renderDiceRow(values: number[]): HTMLElement {
   row.className = 'dice-row';
   for (const v of values) {
     const die = document.createElement('span');
-    die.className = countSuccesses([v]) > 0 ? 'die die--success' : 'die';
+    die.className = isSuccess(v) ? 'die die--success' : 'die';
     die.textContent = String(v);
     row.appendChild(die);
   }
@@ -227,20 +216,15 @@ function renderInkPotCard(ctx: PlayCtx): HTMLElement {
     btn.disabled = !pickable;
 
     if (used) {
-      const isSuperior = countSuccesses(used.languageRoll) > 0;
       btn.classList.add('inkpot-item--used');
-      btn.append(entry.inferior, ' ');
-      const suffix = document.createElement('span');
-      suffix.className = 'small-caps';
-      suffix.textContent = isSuperior ? '→ superior' : '→ inferior';
-      btn.appendChild(suffix);
+      btn.append(
+        entry.inferior,
+        ' ',
+        smallCaps(isSuperior(used.languageRoll) ? '→ superior' : '→ inferior'),
+      );
     } else if (chosen) {
       btn.classList.add('inkpot-item--chosen');
-      btn.append(entry.inferior, ' ');
-      const suffix = document.createElement('span');
-      suffix.className = 'small-caps';
-      suffix.textContent = '← chosen';
-      btn.appendChild(suffix);
+      btn.append(entry.inferior, ' ', smallCaps('← chosen'));
     } else {
       btn.textContent = entry.inferior;
     }
@@ -263,7 +247,7 @@ function renderInkPotCard(ctx: PlayCtx): HTMLElement {
 function renderLetter(ctx: PlayCtx): HTMLElement {
   const letter = document.createElement('section');
   letter.className = 'letter paper';
-  letter.appendChild(renderLetterHeadline(ctx));
+  letter.appendChild(renderLetterhead(ctx.scenario.title, ctx.session.startedAt));
 
   for (const p of ctx.session.paragraphs) {
     const para = document.createElement('p');
@@ -274,19 +258,6 @@ function renderLetter(ctx: PlayCtx): HTMLElement {
 
   letter.appendChild(renderLetterDraftSlot(ctx));
   return letter;
-}
-
-function renderLetterHeadline(ctx: PlayCtx): HTMLElement {
-  const head = document.createElement('div');
-  head.className = 'letterhead';
-  const title = document.createElement('p');
-  title.className = 'letterhead__title';
-  title.textContent = ctx.scenario.title;
-  const date = document.createElement('p');
-  date.className = 'letterhead__date';
-  date.textContent = formatOrdinalDate(ctx.session.startedAt);
-  head.append(title, date);
-  return head;
 }
 
 function renderLetterDraftSlot(ctx: PlayCtx): HTMLElement {
@@ -326,28 +297,21 @@ function renderLetterDraftSlot(ctx: PlayCtx): HTMLElement {
 }
 
 function renderWriteSlot(ctx: PlayCtx): HTMLElement {
-  const wrap = document.createElement('div');
   if (currentDraft.inkPotIndex === null || currentDraft.languageRoll === null) {
-    wrap.appendChild(
-      document.createTextNode('Internal error: missing inkPot index or language roll.'),
-    );
-    return wrap;
+    return internalError('Internal error: missing inkPot index or language roll.');
   }
   const pair = ctx.scenario.inkPot[currentDraft.inkPotIndex];
   if (!pair) {
-    wrap.appendChild(document.createTextNode('Internal error: ink pot entry missing.'));
-    return wrap;
+    return internalError('Internal error: ink pot entry missing.');
   }
-  const isSuperior = countSuccesses(currentDraft.languageRoll) > 0;
-  const word = isSuperior ? pair.superior : pair.inferior;
-  const flourishApplied =
-    currentDraft.attemptedFlourish &&
-    currentDraft.heartRoll !== null &&
-    countSuccesses(currentDraft.heartRoll) > 0;
+  const wrap = document.createElement('div');
+  const word = isSuperior(currentDraft.languageRoll) ? pair.superior : pair.inferior;
+  const flourishApplied = flourishHeld(currentDraft.attemptedFlourish, currentDraft.heartRoll);
   const required =
     flourishApplied && currentDraft.flourishAdjective
       ? `${currentDraft.flourishAdjective} ${word}`
       : word;
+  const requiredLower = required.toLowerCase();
 
   const chip = document.createElement('p');
   chip.className = 'word-chip';
@@ -363,16 +327,17 @@ function renderWriteSlot(ctx: PlayCtx): HTMLElement {
 
   const indicator = document.createElement('p');
   indicator.className = 'word-indicator';
-  indicator.textContent = currentDraft.text.toLowerCase().includes(required.toLowerCase())
-    ? '✓ the word is set upon the page.'
-    : '… the word has not yet been set down.';
+  const updateIndicator = () => {
+    indicator.textContent = currentDraft.text.toLowerCase().includes(requiredLower)
+      ? '✓ the word is set upon the page.'
+      : '… the word has not yet been set down.';
+  };
+  updateIndicator();
   wrap.appendChild(indicator);
 
   ta.addEventListener('input', () => {
     currentDraft.text = ta.value;
-    indicator.textContent = ta.value.toLowerCase().includes(required.toLowerCase())
-      ? '✓ the word is set upon the page.'
-      : '… the word has not yet been set down.';
+    updateIndicator();
   });
 
   const next = document.createElement('button');
@@ -537,12 +502,11 @@ function renderRollStep(
   onRolled: (dice: number[]) => void,
   verdict?: HTMLElement,
 ): HTMLElement {
-  const wrap = document.createElement('div');
   const character = CHARACTERS.find((c) => c.id === ctx.session.characterId);
   if (!character) {
-    wrap.appendChild(document.createTextNode('Character not found.'));
-    return wrap;
+    return internalError('Character not found.');
   }
+  const wrap = document.createElement('div');
   const skillBonusActive = canSpendSkill(ctx, attr);
   const plan = planRoll({
     attribute: attr,
@@ -599,7 +563,7 @@ function renderRollHeartStep(ctx: PlayCtx): HTMLElement {
 function renderRollLanguageStep(ctx: PlayCtx): HTMLElement {
   let verdict: HTMLElement | undefined;
   if (currentDraft.attemptedFlourish && currentDraft.heartRoll) {
-    const held = countSuccesses(currentDraft.heartRoll) > 0;
+    const held = flourishHeld(currentDraft.attemptedFlourish, currentDraft.heartRoll);
     verdict = makeRollVerdict(
       currentDraft.heartRoll,
       held,
@@ -621,26 +585,16 @@ function renderRollLanguageStep(ctx: PlayCtx): HTMLElement {
 }
 
 function renderRollPenmanshipStep(ctx: PlayCtx): HTMLElement {
-  if (currentDraft.inkPotIndex === null || currentDraft.languageRoll === null) {
-    const wrap = document.createElement('div');
-    wrap.appendChild(
-      document.createTextNode('Internal error: missing ink pot index or language roll.'),
-    );
-    return wrap;
+  const pair =
+    currentDraft.inkPotIndex === null ? undefined : ctx.scenario.inkPot[currentDraft.inkPotIndex];
+  if (!pair || currentDraft.languageRoll === null) {
+    return internalError('Internal error: missing ink pot entry or language roll.');
   }
-  const pair = ctx.scenario.inkPot[currentDraft.inkPotIndex];
-  if (!pair) {
-    const wrap = document.createElement('div');
-    wrap.appendChild(document.createTextNode('Internal error: ink pot entry missing.'));
-    return wrap;
-  }
-  const isSuperior = countSuccesses(currentDraft.languageRoll) > 0;
+  const superior = isSuperior(currentDraft.languageRoll);
   const verdict = makeRollVerdict(
     currentDraft.languageRoll,
-    isSuperior,
-    isSuperior
-      ? `Superior — write "${pair.superior}".`
-      : `Inferior — "${pair.inferior}" must serve.`,
+    superior,
+    superior ? `Superior — write "${pair.superior}".` : `Inferior — "${pair.inferior}" must serve.`,
   );
   return renderRollStep(
     ctx,
@@ -655,27 +609,21 @@ function renderRollPenmanshipStep(ctx: PlayCtx): HTMLElement {
 }
 
 function renderStepDone(ctx: PlayCtx): HTMLElement {
-  const wrap = document.createElement('div');
-  wrap.className = 'done-summary';
+  const pair =
+    currentDraft.inkPotIndex === null ? undefined : ctx.scenario.inkPot[currentDraft.inkPotIndex];
   if (
+    !pair ||
     currentDraft.inkPotIndex === null ||
     currentDraft.languageRoll === null ||
     currentDraft.penmanshipRoll === null
   ) {
-    wrap.appendChild(document.createTextNode('Internal error: missing roll data.'));
-    return wrap;
+    return internalError('Internal error: missing roll data.');
   }
-  const pair = ctx.scenario.inkPot[currentDraft.inkPotIndex];
-  if (!pair) {
-    wrap.appendChild(document.createTextNode('Internal error: ink pot entry missing.'));
-    return wrap;
-  }
-  const isSuperior = countSuccesses(currentDraft.languageRoll) > 0;
-  const flourishApplied =
-    currentDraft.attemptedFlourish &&
-    currentDraft.heartRoll !== null &&
-    countSuccesses(currentDraft.heartRoll) > 0;
-  const penOk = countSuccesses(currentDraft.penmanshipRoll) > 0;
+  const wrap = document.createElement('div');
+  wrap.className = 'done-summary';
+  const superior = isSuperior(currentDraft.languageRoll);
+  const flourishApplied = flourishHeld(currentDraft.attemptedFlourish, currentDraft.heartRoll);
+  const penOk = fineHand(currentDraft.penmanshipRoll);
   const pts = paragraphPoints({
     inkPotIndex: currentDraft.inkPotIndex,
     attemptedFlourish: currentDraft.attemptedFlourish,
@@ -697,8 +645,8 @@ function renderStepDone(ctx: PlayCtx): HTMLElement {
 
   const wordLine = document.createElement('p');
   const wordSpan = document.createElement('span');
-  wordSpan.className = isSuperior ? 'success' : 'failure';
-  wordSpan.textContent = isSuperior
+  wordSpan.className = superior ? 'success' : 'failure';
+  wordSpan.textContent = superior
     ? `Superior — "${pair.superior}."`
     : `Inferior — "${pair.inferior}" served.`;
   wordLine.appendChild(wordSpan);

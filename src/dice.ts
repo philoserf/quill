@@ -12,6 +12,10 @@ export function roll(n: number, rng: () => number = Math.random): number[] {
   return out;
 }
 
+export function isSuccess(die: number): boolean {
+  return die >= 5;
+}
+
 export function countSuccesses(dice: number[]): number {
-  return dice.filter((d) => d >= 5).length;
+  return dice.filter(isSuccess).length;
 }

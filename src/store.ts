@@ -1,12 +1,14 @@
 type Updater<T> = (current: T) => T;
 type Listener<T> = (value: T) => void;
 
-// Even `typeof localStorage` throws SecurityError when the browser blocks
+// Even reading `localStorage` throws SecurityError when the browser blocks
 // site data (e.g. Chrome with cookies disabled), so every access goes
-// through this guard.
+// through this guard. Single property read: globalThis.localStorage is
+// undefined (not a ReferenceError) where storage doesn't exist, and a
+// potentially side-effectful getter is only invoked once.
 function storage(): Storage | null {
   try {
-    return typeof localStorage !== 'undefined' ? localStorage : null;
+    return globalThis.localStorage ?? null;
   } catch {
     return null;
   }

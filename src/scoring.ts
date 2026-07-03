@@ -9,18 +9,33 @@ export interface ScoreResult {
   tierName: TierName;
 }
 
+export function formatSignedPoints(pts: number): string {
+  return pts > 0 ? `+${pts}` : String(pts);
+}
+
+export function isSuperior(languageRoll: number[]): boolean {
+  return countSuccesses(languageRoll) > 0;
+}
+
+export function flourishHeld(attemptedFlourish: boolean, heartRoll: number[] | null): boolean {
+  return attemptedFlourish && heartRoll !== null && countSuccesses(heartRoll) > 0;
+}
+
+export function fineHand(penmanshipRoll: number[]): boolean {
+  return countSuccesses(penmanshipRoll) > 0;
+}
+
 export function paragraphPoints(p: Paragraph): number {
-  const isSuperior = countSuccesses(p.languageRoll) > 0;
-  const flourishApplied =
-    p.attemptedFlourish && p.heartRoll !== null && countSuccesses(p.heartRoll) > 0;
+  const superior = isSuperior(p.languageRoll);
+  const flourishApplied = flourishHeld(p.attemptedFlourish, p.heartRoll);
 
   let pts: number;
-  if (flourishApplied && isSuperior) pts = 2;
-  else if (flourishApplied && !isSuperior) pts = -1;
-  else if (!flourishApplied && isSuperior) pts = 1;
+  if (flourishApplied && superior) pts = 2;
+  else if (flourishApplied && !superior) pts = -1;
+  else if (!flourishApplied && superior) pts = 1;
   else pts = 0;
 
-  if (countSuccesses(p.penmanshipRoll) > 0) pts += 1;
+  if (fineHand(p.penmanshipRoll)) pts += 1;
   return pts;
 }
 

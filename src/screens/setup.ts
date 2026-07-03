@@ -1,4 +1,5 @@
 import { CHARACTERS, SKILLS } from '../data';
+import { diceForRating } from '../dice';
 import type { Scenario } from '../types';
 
 export interface SetupCtx {
@@ -19,10 +20,20 @@ export function renderSetup(ctx: SetupCtx): HTMLElement {
 
   function render() {
     root.replaceChildren();
+
+    const titleBlock = document.createElement('div');
+    titleBlock.className = 'desk-title';
     const title = document.createElement('h1');
     title.textContent = 'Quill';
-    title.className = 'display-heading';
-    root.appendChild(title);
+    const subtitle = document.createElement('p');
+    subtitle.className = 'desk-title__subtitle';
+    subtitle.textContent = 'A letter-writing roleplaying game · by Scott Malthouse';
+    const helper = document.createElement('p');
+    helper.className = 'desk-title__helper';
+    helper.textContent = 'Choose a character, a skill, and a scenario — then take up your quill.';
+    titleBlock.append(title, subtitle, helper);
+    root.appendChild(titleBlock);
+
     root.appendChild(renderCharacterStep(state, () => render()));
     if (state.characterId) {
       root.appendChild(renderSkillStep(state, () => render()));
@@ -31,9 +42,12 @@ export function renderSetup(ctx: SetupCtx): HTMLElement {
       root.appendChild(renderScenarioStep(ctx.scenarios, state, () => render()));
     }
     if (state.scenarioId) {
+      const beginRow = document.createElement('div');
+      beginRow.className = 'begin-row';
       const begin = document.createElement('button');
+      begin.type = 'button';
       begin.className = 'btn btn--primary';
-      begin.textContent = 'Begin letter';
+      begin.textContent = 'Begin the letter';
       begin.addEventListener('click', () => {
         if (state.characterId && state.skillId && state.scenarioId) {
           ctx.onBegin({
@@ -43,7 +57,8 @@ export function renderSetup(ctx: SetupCtx): HTMLElement {
           });
         }
       });
-      root.appendChild(begin);
+      beginRow.appendChild(begin);
+      root.appendChild(beginRow);
     }
   }
 
@@ -53,10 +68,14 @@ export function renderSetup(ctx: SetupCtx): HTMLElement {
 
 function renderCharacterStep(state: SetupState, onChange: () => void): HTMLElement {
   const wrap = document.createElement('div');
-  wrap.className = 'step';
+  wrap.className = 'step paper';
   const h = document.createElement('h2');
-  h.textContent = '1. Choose your Character';
+  h.textContent = 'I. The Character';
   wrap.appendChild(h);
+  const prompt = document.createElement('p');
+  prompt.className = 'step__prompt';
+  prompt.textContent = 'Who holds the quill?';
+  wrap.appendChild(prompt);
   const grid = document.createElement('div');
   grid.className = 'card-grid';
   for (const c of CHARACTERS) {
@@ -69,17 +88,26 @@ function renderCharacterStep(state: SetupState, onChange: () => void): HTMLEleme
     const blurb = document.createElement('p');
     blurb.textContent = c.flavor[0] ?? '';
     const attrs = document.createElement('ul');
-    attrs.className = 'attrs';
+    attrs.className = 'attrs-pips';
     for (const [label, rating] of [
       ['Penmanship', c.attributes.penmanship],
       ['Language', c.attributes.language],
       ['Heart', c.attributes.heart],
     ] as const) {
       const li = document.createElement('li');
-      li.append(`${label}: `);
-      const strong = document.createElement('strong');
-      strong.textContent = rating;
-      li.appendChild(strong);
+      const labelEl = document.createElement('span');
+      labelEl.className = 'small-caps';
+      labelEl.textContent = label;
+      const pips = document.createElement('span');
+      pips.className = 'pips';
+      const level = diceForRating(rating);
+      for (let i = 0; i < 3; i++) {
+        const dot = document.createElement('span');
+        dot.className = i < level ? 'pip pip--filled' : 'pip';
+        dot.textContent = i < level ? '●' : '○';
+        pips.appendChild(dot);
+      }
+      li.append(labelEl, pips);
       attrs.appendChild(li);
     }
     card.append(heading, blurb, attrs);
@@ -96,10 +124,14 @@ function renderCharacterStep(state: SetupState, onChange: () => void): HTMLEleme
 
 function renderSkillStep(state: SetupState, onChange: () => void): HTMLElement {
   const wrap = document.createElement('div');
-  wrap.className = 'step';
+  wrap.className = 'step paper';
   const h = document.createElement('h2');
-  h.textContent = '2. Choose your Skill';
+  h.textContent = 'II. The Skill';
   wrap.appendChild(h);
+  const prompt = document.createElement('p');
+  prompt.className = 'step__prompt';
+  prompt.textContent = 'One gift, spent once per letter.';
+  wrap.appendChild(prompt);
   const grid = document.createElement('div');
   grid.className = 'card-grid';
   for (const s of SKILLS) {
@@ -127,10 +159,14 @@ function renderScenarioStep(
   onChange: () => void,
 ): HTMLElement {
   const wrap = document.createElement('div');
-  wrap.className = 'step';
+  wrap.className = 'step paper';
   const h = document.createElement('h2');
-  h.textContent = '3. Choose your Scenario';
+  h.textContent = 'III. The Scenario';
   wrap.appendChild(h);
+  const prompt = document.createElement('p');
+  prompt.className = 'step__prompt';
+  prompt.textContent = 'To whom do you write, and why?';
+  wrap.appendChild(prompt);
 
   const grouped = new Map<string, Scenario[]>();
   for (const sc of scenarios) {

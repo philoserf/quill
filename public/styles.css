@@ -110,8 +110,8 @@ input[type="text"] {
   cursor: pointer;
 }
 
-.paper .btn:not(.btn--primary),
-.paper--side .btn:not(.btn--primary) {
+.paper .btn:not(.btn--primary, .btn--skill),
+.paper--side .btn:not(.btn--primary, .btn--skill) {
   color: var(--ink-soft);
   border-color: var(--line);
 }

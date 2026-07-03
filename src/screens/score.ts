@@ -1,6 +1,6 @@
 import { CHARACTERS, SKILLS } from '../data';
 import { toMarkdown } from '../export';
-import { fineHand, flourishHeld, isSuperior, score } from '../scoring';
+import { fineHand, flourishHeld, formatSignedPoints, isSuperior, score } from '../scoring';
 import type { GameSession, Scenario } from '../types';
 import { renderLetterhead } from './letterhead';
 
@@ -89,7 +89,7 @@ export function renderScore(ctx: ScoreCtx): HTMLElement {
     const hand = penOk ? 'Fine hand' : 'Plain hand';
 
     const row = document.createElement('tr');
-    for (const cell of [String(i + 1), word, hand, String(result.paragraphs[i] ?? 0)]) {
+    for (const cell of [String(i + 1), word, hand, formatSignedPoints(result.paragraphs[i] ?? 0)]) {
       const td = document.createElement('td');
       td.textContent = cell;
       row.appendChild(td);

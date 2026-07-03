@@ -9,6 +9,10 @@ export interface ScoreResult {
   tierName: TierName;
 }
 
+export function formatSignedPoints(pts: number): string {
+  return pts > 0 ? `+${pts}` : String(pts);
+}
+
 export function isSuperior(languageRoll: number[]): boolean {
   return countSuccesses(languageRoll) > 0;
 }

@@ -1,7 +1,13 @@
 import { CHARACTERS, SKILLS } from '../data';
 import { isSuccess, roll } from '../dice';
 import { planRoll } from '../rules';
-import { fineHand, flourishHeld, isSuperior, paragraphPoints } from '../scoring';
+import {
+  fineHand,
+  flourishHeld,
+  formatSignedPoints,
+  isSuperior,
+  paragraphPoints,
+} from '../scoring';
 import type { GameSession, Scenario } from '../types';
 import { renderLetterhead } from './letterhead';
 
@@ -64,10 +70,6 @@ function ensureDraftFor(session: GameSession) {
 function rerender(ctx: PlayCtx) {
   // Trigger main app render by no-op session update.
   ctx.onUpdate((s) => ({ ...s }));
-}
-
-function formatSignedPoints(pts: number): string {
-  return pts > 0 ? `+${pts}` : String(pts);
 }
 
 function smallCaps(text: string): HTMLElement {

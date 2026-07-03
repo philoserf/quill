@@ -60,6 +60,13 @@ describe('Store', () => {
     expect(s.get()).toEqual({ count: 42 });
   });
 
+  test('falls back to initial state and clears corrupt localStorage', () => {
+    localStorage.setItem('bad-key', '{not json');
+    const s = new Store({ count: 0 }, 'bad-key');
+    expect(s.get()).toEqual({ count: 0 });
+    expect(localStorage.getItem('bad-key')).toBeNull();
+  });
+
   test('clear removes from localStorage and resets in-memory to provided value', () => {
     const s = new Store({ count: 1 }, 'c-key');
     s.set((cur) => ({ ...cur, count: 99 }));

@@ -10,7 +10,17 @@ export class Store<T> {
   constructor(initial: T, key: string) {
     this.key = key;
     const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
-    this.state = raw !== null ? (JSON.parse(raw) as T) : initial;
+    if (raw === null) {
+      this.state = initial;
+      return;
+    }
+
+    try {
+      this.state = JSON.parse(raw) as T;
+    } catch {
+      localStorage.removeItem(key);
+      this.state = initial;
+    }
   }
 
   get(): T {

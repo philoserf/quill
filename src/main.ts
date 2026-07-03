@@ -12,7 +12,13 @@ interface AppState {
   session: GameSession | null;
 }
 
-const store = new Store<AppState>({ session: null }, SESSION_KEY);
+// Minimal shape check; stale-but-well-shaped sessions are handled in render()
+// by resetting when the referenced character/skill/scenario no longer exists.
+const store = new Store<AppState>(
+  { session: null },
+  SESSION_KEY,
+  (v): v is AppState => typeof v === 'object' && v !== null && 'session' in v,
+);
 
 function newSession(sel: {
   characterId: string;

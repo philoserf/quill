@@ -1,25 +1,45 @@
 type Updater<T> = (current: T) => T;
 type Listener<T> = (value: T) => void;
 
+// Even `typeof localStorage` throws SecurityError when the browser blocks
+// site data (e.g. Chrome with cookies disabled), so every access goes
+// through this guard.
+function storage(): Storage | null {
+  try {
+    return typeof localStorage !== 'undefined' ? localStorage : null;
+  } catch {
+    return null;
+  }
+}
+
 export class Store<T> {
   private state: T;
   private listeners = new Set<Listener<T>>();
   private readonly key: string;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(initial: T, key: string) {
+  constructor(initial: T, key: string, isValid?: (value: unknown) => value is T) {
     this.key = key;
-    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
-    if (raw === null) {
-      this.state = initial;
-      return;
-    }
+    this.state = initial;
+    const store = storage();
+    const raw = store?.getItem(key) ?? null;
+    if (!store || raw === null) return;
 
     try {
-      this.state = JSON.parse(raw) as T;
+      const parsed: unknown = JSON.parse(raw);
+      const ok = isValid ? isValid(parsed) : parsed !== null && typeof parsed === 'object';
+      if (!ok) throw new Error('persisted value has the wrong shape');
+      this.state = parsed as T;
     } catch {
-      localStorage.removeItem(key);
-      this.state = initial;
+      // Move the payload to a backup key rather than destroying the user's
+      // only copy; the next persist() overwrites the live key anyway. If the
+      // backup write fails, leave the original in place.
+      try {
+        store.setItem(`${key}.corrupt`, raw);
+        store.removeItem(key);
+      } catch {
+        // quota or security failure — keep the original rather than lose it
+      }
     }
   }
 
@@ -47,13 +67,11 @@ export class Store<T> {
 
   clear(reset: T): void {
     this.state = reset;
-    if (typeof localStorage !== 'undefined') localStorage.removeItem(this.key);
+    storage()?.removeItem(this.key);
     for (const fn of this.listeners) fn(this.state);
   }
 
   private persist(): void {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(this.key, JSON.stringify(this.state));
-    }
+    storage()?.setItem(this.key, JSON.stringify(this.state));
   }
 }

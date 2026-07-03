@@ -60,11 +60,60 @@ describe('Store', () => {
     expect(s.get()).toEqual({ count: 42 });
   });
 
-  test('falls back to initial state and clears corrupt localStorage', () => {
+  test('falls back to initial state and moves corrupt payload to a backup key', () => {
     localStorage.setItem('bad-key', '{not json');
     const s = new Store({ count: 0 }, 'bad-key');
     expect(s.get()).toEqual({ count: 0 });
     expect(localStorage.getItem('bad-key')).toBeNull();
+    expect(localStorage.getItem('bad-key.corrupt')).toBe('{not json');
+  });
+
+  test('treats valid-JSON wrong-shape values (e.g. "null") as corrupt', () => {
+    localStorage.setItem('null-key', 'null');
+    const s = new Store({ count: 0 }, 'null-key');
+    expect(s.get()).toEqual({ count: 0 });
+    expect(localStorage.getItem('null-key')).toBeNull();
+    expect(localStorage.getItem('null-key.corrupt')).toBe('null');
+  });
+
+  test('rejects values failing a caller-provided validator', () => {
+    localStorage.setItem('v-key', JSON.stringify({ wrong: true }));
+    const s = new Store({ count: 0 }, 'v-key', (v): v is { count: number } => {
+      return typeof v === 'object' && v !== null && 'count' in v;
+    });
+    expect(s.get()).toEqual({ count: 0 });
+    expect(localStorage.getItem('v-key.corrupt')).toBe(JSON.stringify({ wrong: true }));
+  });
+
+  test('accepts values passing a caller-provided validator', () => {
+    localStorage.setItem('v-ok-key', JSON.stringify({ count: 5 }));
+    const s = new Store({ count: 0 }, 'v-ok-key', (v): v is { count: number } => {
+      return typeof v === 'object' && v !== null && 'count' in v;
+    });
+    expect(s.get()).toEqual({ count: 5 });
+  });
+
+  test('survives a localStorage that throws on access (SecurityError)', () => {
+    Object.defineProperty(globalThis, 'localStorage', {
+      get() {
+        throw new Error('SecurityError: access denied');
+      },
+      configurable: true,
+    });
+    try {
+      const s = new Store({ count: 0 }, 'sec-key');
+      expect(s.get()).toEqual({ count: 0 });
+      s.set((c) => ({ ...c, count: 1 }));
+      expect(s.get()).toEqual({ count: 1 });
+      s.clear({ count: 0 });
+      expect(s.get()).toEqual({ count: 0 });
+    } finally {
+      Object.defineProperty(globalThis, 'localStorage', {
+        value: new FakeStorage() as unknown as Storage,
+        configurable: true,
+        writable: true,
+      });
+    }
   });
 
   test('clear removes from localStorage and resets in-memory to provided value', () => {

@@ -15,7 +15,7 @@ bun run check:ci    # biome check + tsc --noEmit + bun test — non-mutating; ma
 bun run build       # bundle to dist/ via `bun build ./public/index.html`
 ```
 
-`git push` runs `bun run check:ci` via a `simple-git-hooks` pre-push hook (config in `package.json`). Bypass with `SKIP_SIMPLE_GIT_HOOKS=1 git push` for emergencies. CI (`.github/workflows/deploy.yml`) runs the same suite and deploys `dist/` to GitHub Pages on push to `main`.
+`git push` runs `bun run check:ci` via a `simple-git-hooks` pre-push hook (config in `package.json`). Bypass with `SKIP_SIMPLE_GIT_HOOKS=1 git push` for emergencies. CI (`.github/workflows/ci.yml`) runs the same suite on pushes and PRs to `main`; `.github/workflows/deploy.yml` re-runs it and deploys `dist/` to GitHub Pages on push to `main`.
 
 ## Architecture
 

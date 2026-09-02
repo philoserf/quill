@@ -15,7 +15,7 @@ bun run check:ci    # biome check + tsc --noEmit + bun test — non-mutating; ma
 bun run build       # bundle to dist/ via `bun build ./public/index.html`
 ```
 
-`git push` runs `bun run check:ci` via a `simple-git-hooks` pre-push hook (config in `package.json`). Bypass with `SKIP_SIMPLE_GIT_HOOKS=1 git push` for emergencies. CI (`.github/workflows/ci.yml`) runs the same suite on pushes and PRs to `main`; `.github/workflows/deploy.yml` re-runs it and deploys `dist/` to GitHub Pages on push to `main`.
+`git push` runs `bun run check:ci` via a `simple-git-hooks` pre-push hook (config in `package.json`). Bypass with `SKIP_SIMPLE_GIT_HOOKS=1 git push` for emergencies. CI (`.github/workflows/ci.yml`) runs the same suite on pushes and PRs to `main`; `.github/workflows/deploy.yml` re-runs it and deploys `dist/` to GitHub Pages on push to `main`, serving the site at `quill.philoserf.com`. The custom domain lives in `public/CNAME`, which `bun run build` copies to `dist/CNAME` — Bun only emits assets reachable from `public/index.html`, so the copy step is what keeps the domain bound across deploys.
 
 ## Architecture
 

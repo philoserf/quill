@@ -2,6 +2,8 @@
 
 A local web app for playing Scott Malthouse's [Quill](https://www.drivethrurpg.com/) — a single-player letter-writing roleplaying game. Pick a character, scenario, and skill; write a five-paragraph letter under the dice mechanics; export the finished letter as Markdown.
 
+Play it at <https://quill.philoserf.com>.
+
 ## Run
 
 ```sh
@@ -21,6 +23,15 @@ bun run check
 ```sh
 bun run build
 ```
+
+## Deploy
+
+Pushes to `main` build `dist/` and publish it to GitHub Pages via `.github/workflows/deploy.yml`. The site is served from `quill.philoserf.com`; `public/CNAME` holds that hostname and `bun run build` copies it into `dist/` so every deploy re-asserts the custom domain.
+
+Two settings live outside the repository and only need doing once:
+
+- DNS: a `CNAME` record for `quill` pointing at `philoserf.github.io`.
+- Repository settings → Pages: custom domain `quill.philoserf.com`, with _Enforce HTTPS_ enabled once the certificate is issued.
 
 ## Manual smoke test
 

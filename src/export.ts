@@ -1,4 +1,4 @@
-import { score } from './scoring';
+import { flourishHeld, isSuperior, score } from './scoring';
 import type { Character, GameSession, Paragraph, Scenario, Skill } from './types';
 
 const EMDASH = '—';
@@ -10,11 +10,16 @@ function rollCell(values: number[] | null): string {
 function paragraphRow(p: Paragraph, idx: number, scenario: Scenario, points: number): string {
   const pair = scenario.inkPot[p.inkPotIndex];
   const word = pair
-    ? p.languageRoll.some((d) => d >= 5)
+    ? isSuperior(p.languageRoll)
       ? `${pair.superior} (superior)`
       : `${pair.inferior} (inferior)`
     : EMDASH;
-  const flourish = p.attemptedFlourish && p.flourishAdjective ? p.flourishAdjective : EMDASH;
+  // Only a flourish that held is reported — an attempt whose Heart roll failed
+  // earns nothing and is not shown, matching the play screen's done summary.
+  const flourish =
+    flourishHeld(p.attemptedFlourish, p.heartRoll) && p.flourishAdjective
+      ? p.flourishAdjective
+      : EMDASH;
   return `| ${idx + 1} | ${word} | ${flourish} | ${rollCell(p.heartRoll)} | ${rollCell(p.languageRoll)} | ${rollCell(p.penmanshipRoll)} | ${points} |`;
 }
 

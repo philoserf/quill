@@ -168,47 +168,24 @@ function renderScenarioStep(
   prompt.textContent = 'To whom do you write, and why?';
   wrap.appendChild(prompt);
 
-  const grouped = new Map<string, Scenario[]>();
+  const grid = document.createElement('div');
+  grid.className = 'card-grid';
   for (const sc of scenarios) {
-    const list = grouped.get(sc.set) ?? [];
-    list.push(sc);
-    grouped.set(sc.set, list);
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = `card${state.scenarioId === sc.id ? ' card--selected' : ''}`;
+    const heading = document.createElement('h4');
+    heading.textContent = sc.title;
+    const blurb = document.createElement('p');
+    blurb.textContent = sc.profile[0] ?? '';
+    card.append(heading, blurb);
+    card.addEventListener('click', () => {
+      state.scenarioId = sc.id;
+      onChange();
+    });
+    grid.appendChild(card);
   }
-  // Deterministic group order: rulebook first, then supplements alphabetically.
-  const SET_ORDER = ['Quill Rulebook'];
-  const orderedSets = [
-    ...SET_ORDER.filter((s) => grouped.has(s)),
-    ...[...grouped.keys()].filter((s) => !SET_ORDER.includes(s)).sort(),
-  ];
-  for (const setName of orderedSets) {
-    const list = grouped.get(setName);
-    if (!list) continue;
-    const group = document.createElement('div');
-    group.className = 'scenario-group';
-    const groupHeading = document.createElement('h3');
-    groupHeading.className = 'scenario-group__heading';
-    groupHeading.textContent = setName;
-    group.appendChild(groupHeading);
-    const grid = document.createElement('div');
-    grid.className = 'card-grid';
-    for (const sc of list) {
-      const card = document.createElement('button');
-      card.type = 'button';
-      card.className = `card${state.scenarioId === sc.id ? ' card--selected' : ''}`;
-      const heading = document.createElement('h4');
-      heading.textContent = sc.title;
-      const blurb = document.createElement('p');
-      blurb.textContent = sc.profile[0] ?? '';
-      card.append(heading, blurb);
-      card.addEventListener('click', () => {
-        state.scenarioId = sc.id;
-        onChange();
-      });
-      grid.appendChild(card);
-    }
-    group.appendChild(grid);
-    wrap.appendChild(group);
-  }
+  wrap.appendChild(grid);
 
   if (state.scenarioId) {
     const sc = scenarios.find((x) => x.id === state.scenarioId);
@@ -235,16 +212,8 @@ function renderScenarioStep(
       } else {
         for (const r of sc.rulesOfCorrespondence) {
           const para = document.createElement('p');
-          if (r.type === 'narrative') {
-            para.className = 'rule rule--narrative';
-            const badge = document.createElement('span');
-            badge.className = 'rule__badge';
-            badge.textContent = 'Player-enforced';
-            para.append(badge, ' ', r.description);
-          } else {
-            para.className = 'rule';
-            para.textContent = r.description;
-          }
+          para.className = 'rule';
+          para.textContent = r.description;
           detail.appendChild(para);
         }
       }

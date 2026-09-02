@@ -9,7 +9,7 @@ function isStringArray(v: unknown): v is string[] {
   return Array.isArray(v) && v.every((x) => typeof x === 'string');
 }
 
-const KNOWN_MODIFIER_TYPES = new Set(['dice_bonus', 'reroll_highest', 'narrative']);
+const KNOWN_MODIFIER_TYPES = new Set(['dice_bonus', 'reroll_highest']);
 
 function validateModifier(m: unknown): Modifier {
   if (typeof m !== 'object' || m === null) {
@@ -21,17 +21,6 @@ function validateModifier(m: unknown): Modifier {
   }
   if (typeof obj.type !== 'string' || !KNOWN_MODIFIER_TYPES.has(obj.type)) {
     throw new Error(`Unknown modifier type: ${String(obj.type)}`);
-  }
-
-  if (obj.type === 'narrative') {
-    for (const stray of ['attribute', 'amount', 'appliesTo'] as const) {
-      if (stray in obj) {
-        throw new Error(
-          `narrative modifier has stray field "${stray}" — narrative rules are description-only`,
-        );
-      }
-    }
-    return { type: 'narrative', description: obj.description };
   }
 
   if (typeof obj.attribute !== 'string' || !VALID_ATTRS.has(obj.attribute)) {
@@ -84,10 +73,6 @@ export function validateScenario(raw: unknown): Scenario {
   const obj = raw as Record<string, unknown>;
   if (typeof obj.id !== 'string') throw new Error('Scenario.id must be a string');
   if (typeof obj.title !== 'string') throw new Error('Scenario.title must be a string');
-  if (typeof obj.set !== 'string' || obj.set.trim().length === 0) {
-    throw new Error('Scenario.set must be a non-empty string');
-  }
-  const setName = obj.set.trim();
   if (!isStringArray(obj.profile)) throw new Error('Scenario.profile must be string[]');
 
   if (!Array.isArray(obj.rulesOfCorrespondence)) {
@@ -134,7 +119,6 @@ export function validateScenario(raw: unknown): Scenario {
   return {
     id: obj.id,
     title: obj.title,
-    set: setName,
     profile: obj.profile,
     rulesOfCorrespondence: rules,
     inkPot,
@@ -147,25 +131,10 @@ export function validateScenario(raw: unknown): Scenario {
 // and a bundled-in copy works identically in dev and production.
 import archduke from '../public/scenarios/archduke.json' with { type: 'json' };
 import artDealer from '../public/scenarios/art-dealer.json' with { type: 'json' };
-import cruelDistance from '../public/scenarios/cruel-distance.json' with { type: 'json' };
 import father from '../public/scenarios/father.json' with { type: 'json' };
-import forbiddenLove from '../public/scenarios/forbidden-love.json' with { type: 'json' };
 import king from '../public/scenarios/king.json' with { type: 'json' };
-import makingAmends from '../public/scenarios/making-amends.json' with { type: 'json' };
-import somethingMore from '../public/scenarios/something-more.json' with { type: 'json' };
-import winningHeart from '../public/scenarios/winning-heart.json' with { type: 'json' };
 
-const BUNDLED: unknown[] = [
-  archduke,
-  artDealer,
-  cruelDistance,
-  father,
-  forbiddenLove,
-  king,
-  makingAmends,
-  somethingMore,
-  winningHeart,
-];
+const BUNDLED: unknown[] = [archduke, artDealer, father, king];
 
 export function loadScenarios(): Scenario[] {
   return BUNDLED.map((raw) => validateScenario(raw));

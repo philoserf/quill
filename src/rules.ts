@@ -31,8 +31,6 @@ export function planRoll(args: {
         rerollPolicy = 'highest';
         break;
       }
-      case 'narrative':
-        break;
       default: {
         // Compile-time exhaustiveness: TS errors if a new Modifier variant is added.
         const _exhaustive: never = mod;

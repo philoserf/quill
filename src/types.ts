@@ -33,10 +33,6 @@ export type Modifier =
       type: 'reroll_highest';
       attribute: Attribute;
       description: string;
-    }
-  | {
-      type: 'narrative';
-      description: string;
     };
 
 export interface ConsequenceTier {
@@ -47,7 +43,6 @@ export interface ConsequenceTier {
 export interface Scenario {
   id: string;
   title: string;
-  set: string;
   profile: string[];
   rulesOfCorrespondence: Modifier[];
   inkPot: InkPotEntry[];

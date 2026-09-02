@@ -84,6 +84,35 @@ describe('toMarkdown', () => {
     expect(row2).toContain('—');
   });
 
+  test('a flourish whose Heart roll failed is not reported in the table', () => {
+    const failed: GameSession = {
+      ...session,
+      paragraphs: [
+        {
+          ...must(session.paragraphs[0], 'expected paragraph 1 fixture'),
+          heartRoll: [2, 3],
+        },
+        must(session.paragraphs[1], 'expected paragraph 2 fixture'),
+      ],
+    };
+    const md = toMarkdown(failed, scenario, CHARACTERS, SKILLS);
+    const row1 = must(
+      md.split('\n').find((l) => l.startsWith('| 1 |')),
+      'expected row 1 in markdown table',
+    );
+    expect(row1).not.toContain('solemn');
+    expect(row1).toContain('2,3');
+  });
+
+  test('a flourish that held is reported in the table', () => {
+    const md = toMarkdown(session, scenario, CHARACTERS, SKILLS);
+    const row1 = must(
+      md.split('\n').find((l) => l.startsWith('| 1 |')),
+      'expected row 1 in markdown table',
+    );
+    expect(row1).toContain('solemn');
+  });
+
   test('total score and consequence text appear at the end', () => {
     const md = toMarkdown(session, scenario, CHARACTERS, SKILLS);
     expect(md).toContain('**Total**: 5 / tepid');

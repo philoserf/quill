@@ -777,16 +777,8 @@ function renderRecallPanel(scenario: Scenario): HTMLElement {
   } else {
     for (const r of scenario.rulesOfCorrespondence) {
       const para = document.createElement('p');
-      if (r.type === 'narrative') {
-        para.className = 'rule rule--narrative';
-        const badge = document.createElement('span');
-        badge.className = 'rule__badge';
-        badge.textContent = 'Player-enforced';
-        para.append(badge, ' ', r.description);
-      } else {
-        para.className = 'rule';
-        para.textContent = r.description;
-      }
+      para.className = 'rule';
+      para.textContent = r.description;
       panel.appendChild(para);
     }
   }

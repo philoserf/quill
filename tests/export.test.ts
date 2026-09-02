@@ -7,7 +7,6 @@ import { must } from './helpers';
 const scenario: Scenario = {
   id: 'archduke',
   title: 'The Archduke',
-  set: 'Quill Rulebook',
   profile: [],
   rulesOfCorrespondence: [],
   inkPot: [
@@ -57,12 +56,11 @@ const session: GameSession = {
 };
 
 describe('toMarkdown', () => {
-  test('frontmatter contains character, skill, scenario, set, score, consequence', () => {
+  test('frontmatter contains character, skill, scenario, score, consequence', () => {
     const md = toMarkdown(session, scenario, CHARACTERS, SKILLS);
     expect(md).toContain('character: The Monk');
     expect(md).toContain('skill: Illumination');
     expect(md).toContain('scenario: The Archduke');
-    expect(md).toContain('set: Quill Rulebook');
     expect(md).toContain('score: 5');
     expect(md).toContain('consequence: tepid');
   });

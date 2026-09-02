@@ -291,41 +291,6 @@ button:focus-visible {
   color: var(--wax);
 }
 
-.scenario-group {
-  margin: 1rem 0 1.5rem;
-}
-
-.scenario-group + .scenario-group {
-  margin-top: 2rem;
-  padding-top: 1.5rem;
-  border-top: 1px dashed var(--line);
-}
-
-.scenario-group__heading {
-  font-family: var(--display-font);
-  font-size: 1.25rem;
-  margin: 0 0 0.75rem;
-  color: var(--ink-soft);
-}
-
-.rule--narrative {
-  font-style: italic;
-  color: var(--ink-soft);
-}
-
-.rule__badge {
-  display: inline-block;
-  font-family: var(--display-font-sc);
-  font-style: normal;
-  font-size: 0.75rem;
-  letter-spacing: 0.05em;
-  background: var(--paper-pressed);
-  border: 1px solid var(--line);
-  padding: 0.05rem 0.4rem;
-  margin-right: 0.25rem;
-  color: var(--ink);
-}
-
 .scenario-detail {
   margin-top: 1rem;
   padding: 1rem;

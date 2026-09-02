@@ -28,10 +28,12 @@ bun run build
 
 Pushes to `main` build `dist/` and publish it to GitHub Pages via `.github/workflows/deploy.yml`. The site is served from `quill.philoserf.com`; `public/CNAME` holds that hostname and `bun run build` copies it into `dist/` so every deploy re-asserts the custom domain.
 
-Two settings live outside the repository and only need doing once:
+The rest of the configuration lives outside the repository:
 
-- DNS: a `CNAME` record for `quill` pointing at `philoserf.github.io`.
-- Repository settings → Pages: custom domain `quill.philoserf.com`, with _Enforce HTTPS_ enabled once the certificate is issued.
+- DNS (Cloudflare): a `CNAME` record for `quill` pointing at `philoserf.github.io`, proxied.
+- Cloudflare SSL/TLS: Full (strict). Flexible loops against the HTTPS redirect Pages issues on its own.
+- Repository settings → Pages: custom domain `quill.philoserf.com`. GitHub verifies the domain by checking that it resolves to Pages, and through the proxy it sees Cloudflare addresses instead — so _Enforce HTTPS_ may be unavailable, and the same check gates certificate renewal. Cloudflare terminates TLS either way; if a renewal fails, set the record to DNS-only long enough for GitHub to verify, then proxy it again.
+- Analytics: Cloudflare Web Analytics, injected at the edge. Do not put the beacon snippet in `public/index.html` — the edge adds it, and a second copy double-counts every page view.
 
 ## Manual smoke test
 

@@ -1,4 +1,4 @@
-import { CHARACTERS, SKILLS } from '../data';
+import { CHARACTERS, characterById, SKILLS } from '../data';
 import { toMarkdown } from '../export';
 import { fineHand, flourishHeld, formatSignedPoints, isSuperior, score } from '../scoring';
 import type { GameSession, Scenario } from '../types';
@@ -45,7 +45,7 @@ export function renderScore(ctx: ScoreCtx): HTMLElement {
     para.textContent = p.text;
     letterCard.appendChild(para);
   }
-  const character = CHARACTERS.find((c) => c.id === ctx.session.characterId);
+  const character = characterById(ctx.session.characterId);
   const signature = document.createElement('div');
   signature.className = 'signature-row';
   const signatureText = document.createElement('span');

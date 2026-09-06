@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { CHARACTERS, SKILLS } from '../src/data';
+import { CHARACTERS, characterById, SKILLS, skillById } from '../src/data';
 
 describe('CHARACTERS', () => {
   test('contains exactly 6 archetypes from the rulebook', () => {
@@ -27,5 +27,17 @@ describe('SKILLS', () => {
     expect(SKILLS).toHaveLength(3);
     const bonusAttrs = SKILLS.map((s) => s.bonusAttribute).sort();
     expect(bonusAttrs).toEqual(['heart', 'language', 'penmanship']);
+  });
+});
+
+describe('lookup helpers', () => {
+  test('characterById finds a known character and returns undefined otherwise', () => {
+    expect(characterById('poet')?.name).toBe('The Poet');
+    expect(characterById('cartographer')).toBeUndefined();
+  });
+
+  test('skillById finds a known skill and returns undefined otherwise', () => {
+    expect(skillById('illumination')?.bonusAttribute).toBe('penmanship');
+    expect(skillById('sorcery')).toBeUndefined();
   });
 });

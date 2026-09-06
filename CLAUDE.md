@@ -2,18 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Commands
-
-```sh
-bun install         # also runs `simple-git-hooks` to install the pre-push hook
-bun run dev         # http://localhost:3000 — Bun serves public/index.html and bundles src/ on the fly
-bun test            # runs everything in tests/
-bun test tests/scoring.test.ts          # single file
-bun test -t "paragraphPoints"           # by test name
-bun run check       # biome check --write (format + lint, applies fixes)
-bun run check:ci    # biome check + tsc --noEmit + bun test — non-mutating; matches CI and pre-push hook
-bun run build       # bundle to dist/ via `bun build ./public/index.html`
-```
+## Push and deploy
 
 `git push` runs `bun run check:ci` via a `simple-git-hooks` pre-push hook (config in `package.json`). Bypass with `SKIP_SIMPLE_GIT_HOOKS=1 git push` for emergencies. CI (`.github/workflows/ci.yml`) runs the same suite on pushes and PRs to `main`; `.github/workflows/deploy.yml` re-runs it and deploys `dist/` to GitHub Pages on push to `main`, serving the site at `quill.philoserf.com`. The custom domain lives in `public/CNAME`, which `bun run build` copies to `dist/CNAME` — Bun only emits assets reachable from `public/index.html`, so the copy step is what keeps the domain bound across deploys. The domain is proxied through Cloudflare, which also injects the Web Analytics beacon at the edge — never add that snippet to `public/index.html`, or page views are counted twice. README's Deploy section documents the out-of-repo settings.
 
@@ -27,18 +16,13 @@ Vanilla TS SPA, no framework. Entry chain: `public/index.html` → `src/main.ts`
 
 **Scenarios are bundled at build time** — `src/scenarios.ts` uses `import scenario from '../public/scenarios/foo.json' with { type: 'json' }` and runs every payload through `validateScenario`. Bun's HTML dev server doesn't serve sibling JSON via fetch (it returns the SPA HTML), so bundling is the only path that works in both dev and prod. **To add a scenario**: drop the JSON in `public/scenarios/`, add the import + entry to the `BUNDLED` array. The validator requires `consequences` to have exactly the thresholds `[0, 5, 8, 11]` (matches `TIER_NAMES` in `src/types.ts`).
 
-**Game logic split**:
-
-- `dice.ts` — pure `roll`, `countSuccesses` (5+ on d6 is a success), `diceForRating`.
-- `rules.ts` — `planRoll` resolves the dice pool for one attribute given character rating + scenario `rulesOfCorrespondence` modifiers + active skill bonus. `dice_bonus` modifiers may be character-gated via `appliesTo.characters`; `reroll_highest` policy is consumed inside the play screen's penmanship roll.
-- `scoring.ts` — `paragraphPoints` (superior word, flourish, penmanship), `score` walks consequence tiers (highest threshold ≤ total).
-- `export.ts` — Markdown export with YAML frontmatter + paragraph table + tier text.
+**Game logic** lives in `dice.ts`, `rules.ts`, `scoring.ts`, and `export.ts`. Two couplings the files don't show on their own: `dice_bonus` modifiers in `rules.ts` may be character-gated via `appliesTo.characters`, and the `reroll_highest` policy is resolved not in `rules.ts` but inside the play screen's penmanship roll.
 
 **Data**: `src/data.ts` ships the 6 characters and 3 skills as hard-coded constants (rulebook content); scenarios are JSON for easier authoring.
 
 ## TypeScript conventions
 
-`tsconfig.json` enables `strict`, `noUncheckedIndexedAccess`, and `exactOptionalPropertyTypes`. Array/record indexing returns `T | undefined` — handle the undefined case explicitly. For optional properties, omit the key rather than setting `undefined`. Biome enforces single quotes, semicolons, 2-space indent, 100-col lines.
+`tsconfig.json` enables `strict`, `noUncheckedIndexedAccess`, and `exactOptionalPropertyTypes`. Array/record indexing returns `T | undefined` — handle the undefined case explicitly. For optional properties, omit the key rather than setting `undefined`.
 
 ## Manual smoke test
 

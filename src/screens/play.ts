@@ -8,7 +8,7 @@ import {
   isSuperior,
   paragraphPoints,
 } from '../scoring';
-import type { GameSession, Scenario } from '../types';
+import type { GameSession, Paragraph, Scenario } from '../types';
 import { renderLetterhead } from './letterhead';
 
 export interface PlayCtx {
@@ -49,6 +49,24 @@ function emptyDraft(): Draft {
     penmanshipRoll: null,
     text: '',
     skillUsedHere: null,
+  };
+}
+
+// The single Draft -> Paragraph mapping. The done step needs a Paragraph twice —
+// once to preview the points, once to commit the record — and a second copy of
+// this mapping would let the previewed score drift from the recorded one.
+// Returns null when the draft is not yet complete enough to score.
+function draftToParagraph(d: Draft): Paragraph | null {
+  if (d.inkPotIndex === null || d.languageRoll === null || d.penmanshipRoll === null) return null;
+  return {
+    inkPotIndex: d.inkPotIndex,
+    attemptedFlourish: d.attemptedFlourish,
+    flourishAdjective: d.attemptedFlourish ? d.flourishAdjective : null,
+    heartRoll: d.heartRoll,
+    languageRoll: d.languageRoll,
+    penmanshipRoll: d.penmanshipRoll,
+    skillUsedHere: d.skillUsedHere,
+    text: d.text,
   };
 }
 
@@ -611,34 +629,20 @@ function renderRollPenmanshipStep(ctx: PlayCtx): HTMLElement {
 }
 
 function renderStepDone(ctx: PlayCtx): HTMLElement {
-  const pair =
-    currentDraft.inkPotIndex === null ? undefined : ctx.scenario.inkPot[currentDraft.inkPotIndex];
-  if (
-    !pair ||
-    currentDraft.inkPotIndex === null ||
-    currentDraft.languageRoll === null ||
-    currentDraft.penmanshipRoll === null
-  ) {
+  const para = draftToParagraph(currentDraft);
+  const pair = para === null ? undefined : ctx.scenario.inkPot[para.inkPotIndex];
+  if (!para || !pair) {
     return internalError('Internal error: missing roll data.');
   }
   const wrap = document.createElement('div');
   wrap.className = 'done-summary';
-  const superior = isSuperior(currentDraft.languageRoll);
-  const flourishApplied = flourishHeld(currentDraft.attemptedFlourish, currentDraft.heartRoll);
-  const penOk = fineHand(currentDraft.penmanshipRoll);
-  const pts = paragraphPoints({
-    inkPotIndex: currentDraft.inkPotIndex,
-    attemptedFlourish: currentDraft.attemptedFlourish,
-    flourishAdjective: currentDraft.attemptedFlourish ? currentDraft.flourishAdjective : null,
-    heartRoll: currentDraft.heartRoll,
-    languageRoll: currentDraft.languageRoll,
-    penmanshipRoll: currentDraft.penmanshipRoll,
-    skillUsedHere: currentDraft.skillUsedHere,
-    text: currentDraft.text,
-  });
+  const superior = isSuperior(para.languageRoll);
+  const flourishApplied = flourishHeld(para.attemptedFlourish, para.heartRoll);
+  const penOk = fineHand(para.penmanshipRoll);
+  const pts = paragraphPoints(para);
 
   const penLine = document.createElement('p');
-  penLine.append(renderDiceRow(currentDraft.penmanshipRoll), ' ');
+  penLine.append(renderDiceRow(para.penmanshipRoll), ' ');
   const penLabel = document.createElement('span');
   penLabel.className = penOk ? 'success' : 'failure';
   penLabel.textContent = penOk ? 'A fine hand — +1 point.' : 'A plain hand — no bonus.';
@@ -671,33 +675,15 @@ function renderStepDone(ctx: PlayCtx): HTMLElement {
   next.className = 'btn btn--primary';
   next.textContent = isLast ? 'Seal & finish the letter' : 'Next paragraph';
   next.addEventListener('click', () => {
-    const draft = currentDraft;
-    if (
-      draft.inkPotIndex === null ||
-      draft.languageRoll === null ||
-      draft.penmanshipRoll === null
-    ) {
-      return;
-    }
-    const inkPotIndex = draft.inkPotIndex;
-    const languageRoll = draft.languageRoll;
-    const penmanshipRoll = draft.penmanshipRoll;
+    // Snapshot the draft before the reset below; nothing may read currentDraft after it.
+    const newPara = draftToParagraph(currentDraft);
+    if (!newPara) return;
     // Reset the draft BEFORE onUpdate. The store notifies subscribers synchronously,
     // which triggers a re-render that reads currentDraft.phase. If we reset after,
     // the re-render shows PARAGRAPH_DONE again and the player has to reload.
     currentDraft = emptyDraft();
     ctx.onUpdate((s) => {
-      const newPara = {
-        inkPotIndex,
-        attemptedFlourish: draft.attemptedFlourish,
-        flourishAdjective: draft.attemptedFlourish ? draft.flourishAdjective : null,
-        heartRoll: draft.heartRoll,
-        languageRoll,
-        penmanshipRoll,
-        skillUsedHere: draft.skillUsedHere,
-        text: draft.text,
-      };
-      const skillSpent = s.skillSpent || draft.skillUsedHere !== null;
+      const skillSpent = s.skillSpent || newPara.skillUsedHere !== null;
       const paragraphs = [...s.paragraphs, newPara];
       const status: 'in_progress' | 'finished' =
         paragraphs.length >= 5 ? 'finished' : 'in_progress';

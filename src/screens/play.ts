@@ -1,4 +1,4 @@
-import { CHARACTERS, SKILLS } from '../data';
+import { characterById, skillById } from '../data';
 import { isSuccess, roll } from '../dice';
 import { planRoll } from '../rules';
 import {
@@ -131,13 +131,13 @@ function attachRollButton(btn: HTMLButtonElement, onRoll: () => void): void {
 
 function canSpendSkill(ctx: PlayCtx, attr: 'penmanship' | 'language' | 'heart'): boolean {
   if (ctx.session.skillSpent) return false;
-  const skill = SKILLS.find((s) => s.id === ctx.session.skillId);
+  const skill = skillById(ctx.session.skillId);
   return !!skill && skill.bonusAttribute === attr && currentDraft.skillUsedHere === attr;
 }
 
 function canSpendSkillButton(ctx: PlayCtx, attr: 'penmanship' | 'language' | 'heart'): boolean {
   if (ctx.session.skillSpent) return false;
-  const skill = SKILLS.find((s) => s.id === ctx.session.skillId);
+  const skill = skillById(ctx.session.skillId);
   return !!skill && skill.bonusAttribute === attr && currentDraft.skillUsedHere !== attr;
 }
 
@@ -146,7 +146,7 @@ function makeSkillButton(
   attr: 'penmanship' | 'language' | 'heart',
   onChange: () => void,
 ): HTMLElement {
-  const skill = SKILLS.find((s) => s.id === ctx.session.skillId);
+  const skill = skillById(ctx.session.skillId);
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'btn btn--skill';
@@ -522,7 +522,7 @@ function renderRollStep(
   onRolled: (dice: number[]) => void,
   verdict?: HTMLElement,
 ): HTMLElement {
-  const character = CHARACTERS.find((c) => c.id === ctx.session.characterId);
+  const character = characterById(ctx.session.characterId);
   if (!character) {
     return internalError('Character not found.');
   }
@@ -701,8 +701,8 @@ function renderMarginaliaReferenceCard(ctx: PlayCtx): HTMLElement {
   h.textContent = 'The Correspondent';
   card.appendChild(h);
 
-  const character = CHARACTERS.find((c) => c.id === ctx.session.characterId);
-  const skill = SKILLS.find((s) => s.id === ctx.session.skillId);
+  const character = characterById(ctx.session.characterId);
+  const skill = skillById(ctx.session.skillId);
   const charLine = document.createElement('p');
   charLine.className = 'char-line';
   charLine.append(`${character?.name ?? ''} — ${skill?.name ?? ''} `);

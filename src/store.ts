@@ -18,7 +18,6 @@ export class Store<T> {
   private state: T;
   private listeners = new Set<Listener<T>>();
   private readonly key: string;
-  private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(initial: T, key: string, isValid?: (value: unknown) => value is T) {
     this.key = key;
@@ -49,15 +48,10 @@ export class Store<T> {
     return this.state;
   }
 
-  set(updater: Updater<T>, opts: { debouncePersist?: boolean } = {}): void {
+  set(updater: Updater<T>): void {
     this.state = updater(this.state);
     for (const fn of this.listeners) fn(this.state);
-    if (opts.debouncePersist) {
-      if (this.debounceTimer) clearTimeout(this.debounceTimer);
-      this.debounceTimer = setTimeout(() => this.persist(), 200);
-    } else {
-      this.persist();
-    }
+    this.persist();
   }
 
   subscribe(fn: Listener<T>): () => void {

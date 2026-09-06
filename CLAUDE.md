@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Vanilla TS SPA, no framework. Entry chain: `public/index.html` → `src/main.ts` → screens in `src/screens/`. Rendering is direct DOM construction (`document.createElement`); each screen function returns an `HTMLElement` and the root is fully replaced via `rootEl.replaceChildren()` on every store change.
 
-**State** — `Store<T>` (`src/store.ts`) is a ~50-line pub/sub with localStorage persistence under key `quill.session.v1`. `set()` mutates, notifies subscribers, and persists (debounced if `{ debouncePersist: true }` — used for textarea input). Top-level state is `{ session: GameSession | null }`; `null` means the Setup screen, otherwise `session.status` ('in_progress' | 'finished') selects Play vs Score.
+**State** — `Store<T>` (`src/store.ts`) is a ~50-line pub/sub with localStorage persistence under key `quill.session.v1`. `set()` mutates, notifies subscribers, and persists. Top-level state is `{ session: GameSession | null }`; `null` means the Setup screen, otherwise `session.status` ('in_progress' | 'finished') selects Play vs Score.
 
 **Play screen draft state** — `src/screens/play.ts` holds a module-level `currentDraft` for the in-progress paragraph (phase, ink-pot pick, flourish, rolls, text). It is **deliberately not in the persisted store**: only completed paragraphs land in `session.paragraphs` when the player advances from `PARAGRAPH_DONE`. The draft is reset BEFORE calling `onUpdate` (see comment in `renderParagraphDone`) — the store notifies synchronously, so resetting after would cause the re-render to read stale phase state and re-show the same screen.
 

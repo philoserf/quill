@@ -10,19 +10,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Vanilla TS SPA, no framework. Entry chain: `public/index.html` → `src/main.ts` → screens in `src/screens/`. Rendering is direct DOM construction (`document.createElement`); each screen function returns an `HTMLElement` and the root is fully replaced via `rootEl.replaceChildren()` on every store change.
 
-**State** — `Store<T>` (`src/store.ts`) is a ~50-line pub/sub with localStorage persistence under key `quill.session.v1`. `set()` mutates, notifies subscribers, and persists. Top-level state is `{ session: GameSession | null }`; `null` means the Setup screen, otherwise `session.status` ('in_progress' | 'finished') selects Play vs Score.
+**State** — `Store<T>` (`src/store.ts`) is a small pub/sub with localStorage persistence under key `quill.session.v1`. `set()` mutates, notifies subscribers, and persists. Top-level state is `{ session: GameSession | null }`; `null` means the Setup screen, otherwise `session.status` ('in_progress' | 'finished') selects Play vs Score.
 
-**Play screen draft state** — `src/screens/play.ts` holds a module-level `currentDraft` for the in-progress paragraph (phase, ink-pot pick, flourish, rolls, text). It is **deliberately not in the persisted store**: only completed paragraphs land in `session.paragraphs` when the player advances from `PARAGRAPH_DONE`. The draft is reset BEFORE calling `onUpdate` (see comment in `renderParagraphDone`) — the store notifies synchronously, so resetting after would cause the re-render to read stale phase state and re-show the same screen.
+**Play screen draft state** — `src/screens/play.ts` holds a module-level `currentDraft` for the in-progress paragraph (phase, ink-pot pick, flourish, rolls, text). It is **deliberately not in the persisted store**: only completed paragraphs land in `session.paragraphs` when the player advances from `PARAGRAPH_DONE`. The draft is reset BEFORE calling `onUpdate` (see comment in `renderStepDone`) — the store notifies synchronously, so resetting after would cause the re-render to read stale phase state and re-show the same screen.
 
 **Scenarios are bundled at build time** — `src/scenarios.ts` uses `import scenario from '../public/scenarios/foo.json' with { type: 'json' }` and runs every payload through `validateScenario`. Bun's HTML dev server doesn't serve sibling JSON via fetch (it returns the SPA HTML), so bundling is the only path that works in both dev and prod. **To add a scenario**: drop the JSON in `public/scenarios/`, add the import + entry to the `BUNDLED` array. The validator requires `consequences` to have exactly the thresholds `[0, 5, 8, 11]` (matches `TIER_NAMES` in `src/types.ts`).
 
-**Game logic** lives in `dice.ts`, `rules.ts`, `scoring.ts`, and `export.ts`. Two couplings the files don't show on their own: `dice_bonus` modifiers in `rules.ts` may be character-gated via `appliesTo.characters`, and the `reroll_highest` policy is resolved not in `rules.ts` but inside the play screen's penmanship roll.
+**Game logic** lives in `dice.ts`, `rules.ts`, `scoring.ts`, and `export.ts`. Two couplings the files don't show on their own: `dice_bonus` modifiers in `rules.ts` may be character-gated via `appliesTo.characters`, and the `reroll_highest` policy is resolved not in `rules.ts` but inside `renderRollStep` in the play screen, the shared step behind all three attribute rolls.
 
 **Data**: `src/data.ts` ships the 6 characters and 3 skills as hard-coded constants (rulebook content); scenarios are JSON for easier authoring.
 
 ## TypeScript conventions
 
 `tsconfig.json` enables `strict`, `noUncheckedIndexedAccess`, and `exactOptionalPropertyTypes`. Array/record indexing returns `T | undefined` — handle the undefined case explicitly. For optional properties, omit the key rather than setting `undefined`.
+
+## Historical docs
+
+`docs/superpowers/` holds the original design spec and implementation plan; neither has been touched since it was added, so read them for intent — the spec's non-goals are the clearest statement of what this app deliberately does not do — and let the code win wherever they disagree. The plan's "REQUIRED SUB-SKILL" preamble is an artifact of the initial build, not an instruction to a session working here now.
 
 ## Manual smoke test
 

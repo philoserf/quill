@@ -383,7 +383,7 @@ sed -n '109,117p' src/scenarios.ts
 unconditionally, on the strength of the guard above it. Read the comment carefully — it is
 true today and stops being true the moment a third modifier type is registered without a
 matching branch here. That trap is filed as
-`.issues/validate-modifier-silently-coerces-unknown-types.md`.
+#55.
 
 ```bash
 sed -n '63,69p' src/scenarios.ts
@@ -621,7 +621,7 @@ sed -n '228,258p' src/screens/play.ts
 
 Because a used entry is disabled and has no handler, the ink pot must hold at least one
 word per paragraph or the loop cannot terminate. The validator does not check that — filed
-as `.issues/ink-pot-minimum-size-invariant-unenforced.md`.
+as #35.
 
 ### Rolling
 
@@ -747,7 +747,7 @@ That `paragraphs.length >= 5` is the transition to the Score screen — the stor
 notify sees `status: 'finished'` and `main.ts` dispatches to `renderScore` instead. It is
 also one of six independent spellings of "a letter is five paragraphs" in this file, none
 of which is a named constant; filed as
-`.issues/five-paragraph-letter-length-has-no-definition.md`.
+#33.
 
 ## Scoring: `src/scoring.ts`
 
@@ -792,7 +792,7 @@ Tier lookup walks the sorted thresholds and keeps the last one the total clears,
 negative total floors to the lowest tier. The final cast is safe only because
 `validateScenario` guaranteed the four thresholds — an invariant the `Scenario` type itself
 does not carry, filed as
-`.issues/score-trusts-a-threshold-invariant-the-type-does-not-carry.md`.
+#26.
 
 ```bash
 sed -n '42,57p' src/scoring.ts
@@ -921,14 +921,10 @@ requires holding all four in mind at once.
 
 | # | Severity | Issue | Primary location |
 | --- | --- | --- | --- |
-| 1 | medium | `play-screen-has-no-automated-coverage` | `src/screens/play.ts`, `tests/` |
-| 2 | low | `reroll-policy-is-split-across-rules-and-the-play-screen` | `src/rules.ts:29-33`, `src/screens/play.ts:556-562` |
+| 1 | medium | #38 | `src/screens/play.ts`, `tests/` |
+| 2 | low | #43 | `src/rules.ts:29-33`, `src/screens/play.ts:556-562` |
 
 **Total: 2 issues (0 critical, 0 high, 1 medium, 1 low)**
 
-Findings from the `code-theory` pass on the same code are in `.issues/` alongside these:
-`validate-modifier-silently-coerces-unknown-types`,
-`ink-pot-minimum-size-invariant-unenforced`,
-`five-paragraph-letter-length-has-no-definition`, and
-`score-trusts-a-threshold-invariant-the-type-does-not-carry`.
+Findings from the `code-theory` pass over the same code are #55, #35, #33 and #26.
 

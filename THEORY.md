@@ -148,9 +148,9 @@ ink-pot entries.
 
 | # | Severity | Issue | Primary location |
 | --- | --- | --- | --- |
-| 1 | medium | `validate-modifier-silently-coerces-unknown-types` | `src/scenarios.ts:63-68` |
-| 2 | medium | `ink-pot-minimum-size-invariant-unenforced` | `src/scenarios.ts:83-85`, `src/screens/play.ts:227-262` |
-| 3 | medium | `five-paragraph-letter-length-has-no-definition` | `src/screens/play.ts:73,420,422,672,689,723` |
-| 4 | low | `score-trusts-a-threshold-invariant-the-type-does-not-carry` | `src/scoring.ts:55` |
+| 1 | medium | #55 | `src/scenarios.ts:63-68` |
+| 2 | medium | #35 | `src/scenarios.ts:83-85`, `src/screens/play.ts:227-262` |
+| 3 | medium | #33 | `src/screens/play.ts:73,420,422,672,689,723` |
+| 4 | low | #26 | `src/scoring.ts:55` |
 
 **Total: 4 issues (0 critical, 0 high, 3 medium, 1 low)**

@@ -3,22 +3,8 @@ import { SCENARIOS } from './scenarios';
 import { renderPlay } from './screens/play';
 import { renderScore } from './screens/score';
 import { renderSetup } from './screens/setup';
-import { Store } from './store';
+import { clear, load, save } from './store';
 import type { GameSession, Scenario } from './types';
-
-const SESSION_KEY = 'quill.session.v1';
-
-interface AppState {
-  session: GameSession | null;
-}
-
-// Minimal shape check; stale-but-well-shaped sessions are handled in render()
-// by resetting when the referenced character/skill/scenario no longer exists.
-const store = new Store<AppState>(
-  { session: null },
-  SESSION_KEY,
-  (v): v is AppState => typeof v === 'object' && v !== null && 'session' in v,
-);
 
 function newSession(sel: {
   characterId: string;
@@ -37,62 +23,101 @@ function newSession(sel: {
   };
 }
 
+// A session can only be stale *as loaded*: characters, skills and scenarios are
+// all compile-time constants, so the id sets are fixed for the life of the page.
+// Checking once at mount keeps the recovery write out of any render.
+function hydrate(scenarios: Scenario[]): GameSession | null {
+  const session = load();
+  if (!session) return null;
+  const known =
+    scenarios.some((s) => s.id === session.scenarioId) &&
+    characterById(session.characterId) !== undefined &&
+    skillById(session.skillId) !== undefined;
+  if (!known) {
+    clear();
+    return null;
+  }
+  return session;
+}
+
 function mount(scenarios: Scenario[]) {
-  const rootEl = document.getElementById('app') as HTMLElement;
-  if (!rootEl) throw new Error('Missing #app');
+  const el = document.getElementById('app');
+  if (!el) throw new Error('Missing #app');
+  const rootEl: HTMLElement = el;
+
+  let session = hydrate(scenarios);
+  let warnedAboutSaving = false;
+
+  // Persisting and repainting are separate channels. A phase transition inside
+  // the play screen repaints without writing; only a committed paragraph, a new
+  // letter, or a restart is durable.
+  function commit(next: GameSession | null) {
+    session = next;
+    if (!save(next) && !warnedAboutSaving) {
+      warnedAboutSaving = true;
+      console.warn('Quill: this letter is not being saved — localStorage refused the write.');
+    }
+    render();
+  }
 
   function render() {
-    const state = store.get();
     rootEl.replaceChildren();
-    const session = state.session;
 
     if (!session) {
       rootEl.appendChild(
         renderSetup({
           scenarios,
-          onBegin: (sel) => store.set(() => ({ session: newSession(sel) })),
+          onBegin: (sel) => commit(newSession(sel)),
         }),
       );
       return;
     }
 
-    const scenario = scenarios.find((s) => s.id === session.scenarioId);
-    const character = characterById(session.characterId);
-    const skill = skillById(session.skillId);
-    if (!scenario || !character || !skill) {
-      // Stale session referencing renamed/removed character, skill, or scenario → reset.
-      store.clear({ session: null });
-      return;
-    }
+    const current = session;
+    const scenario = scenarios.find((s) => s.id === current.scenarioId);
+    if (!scenario) throw new Error(`Unknown scenario: ${current.scenarioId}`);
 
-    if (session.status === 'in_progress') {
+    if (current.status === 'in_progress') {
       rootEl.appendChild(
         renderPlay({
-          session,
+          session: current,
           scenario,
-          onUpdate: (updater) =>
-            store.set((s) => ({ session: s.session ? updater(s.session) : null })),
+          repaint: render,
+          onUpdate: (updater) => commit(updater(current)),
         }),
       );
     } else {
       rootEl.appendChild(
         renderScore({
-          session,
+          session: current,
           scenario,
-          onRestart: () => store.clear({ session: null }),
+          onRestart: () => commit(null),
         }),
       );
     }
   }
 
-  store.subscribe(render);
   render();
 }
 
 try {
   mount(SCENARIOS);
 } catch (err) {
+  // Any unrecoverable state gets a way out rather than a dead-end string.
   const root = document.getElementById('app');
-  if (root) root.textContent = `Failed to load Quill: ${(err as Error).message}`;
+  if (root) {
+    root.replaceChildren();
+    const msg = document.createElement('p');
+    msg.textContent = `Quill could not open this letter: ${(err as Error).message}`;
+    const restart = document.createElement('button');
+    restart.type = 'button';
+    restart.className = 'btn btn--primary';
+    restart.textContent = 'Start a new letter';
+    restart.addEventListener('click', () => {
+      clear();
+      location.reload();
+    });
+    root.append(msg, restart);
+  }
   throw err;
 }

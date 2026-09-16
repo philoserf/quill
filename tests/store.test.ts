@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { Store } from '../src/store';
+import { clear, load, save } from '../src/store';
+import type { GameSession } from '../src/types';
+
+const KEY = 'quill.session.v1';
+const CORRUPT = `${KEY}.corrupt`;
 
 // jsdom-free fake localStorage
 class FakeStorage {
@@ -22,117 +26,138 @@ class FakeStorage {
   }
 }
 
-beforeEach(() => {
-  (globalThis as unknown as { localStorage: Storage }).localStorage =
-    new FakeStorage() as unknown as Storage;
+function install(store: unknown) {
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: store,
+    configurable: true,
+    writable: true,
+  });
+}
+
+function session(overrides: Partial<GameSession> = {}): GameSession {
+  return {
+    id: 'g1',
+    startedAt: '2026-01-01T00:00:00.000Z',
+    characterId: 'monk',
+    skillId: 'illumination',
+    scenarioId: 'archduke',
+    skillSpent: false,
+    paragraphs: [],
+    status: 'in_progress',
+    ...overrides,
+  };
+}
+
+beforeEach(() => install(new FakeStorage()));
+afterEach(() => install(undefined));
+
+describe('load / save / clear', () => {
+  test('round-trips a session', () => {
+    expect(save(session({ id: 'abc' }))).toBe(true);
+    expect(load()?.id).toBe('abc');
+  });
+
+  test('load returns null when nothing is stored', () => {
+    expect(load()).toBeNull();
+  });
+
+  test('clear removes the key', () => {
+    save(session());
+    clear();
+    expect(localStorage.getItem(KEY)).toBeNull();
+    expect(load()).toBeNull();
+  });
 });
 
-afterEach(() => {
-  (globalThis as { localStorage?: Storage | undefined }).localStorage = undefined;
+describe('hydration', () => {
+  test('unwraps the legacy { session } payload', () => {
+    // v1 wrapped the session one level deep. Existing saved letters must survive.
+    localStorage.setItem(KEY, JSON.stringify({ session: session({ id: 'legacy' }) }));
+    expect(load()?.id).toBe('legacy');
+    expect(localStorage.getItem(CORRUPT)).toBeNull();
+  });
+
+  test('a legacy payload holding an explicit null is an absent session, not corruption', () => {
+    localStorage.setItem(KEY, JSON.stringify({ session: null }));
+    expect(load()).toBeNull();
+    expect(localStorage.getItem(CORRUPT)).toBeNull();
+  });
+
+  test('quarantines a payload that parses but is not a session', () => {
+    // The shape this predicate exists for: valid ids, no paragraphs array.
+    // It parses, so the old `'session' in v` check passed it straight through
+    // to a render that dereferenced paragraphs.length and threw.
+    const raw = JSON.stringify({ session: { id: 'x' } });
+    localStorage.setItem(KEY, raw);
+    expect(load()).toBeNull();
+    expect(localStorage.getItem(CORRUPT)).toBe(raw);
+    expect(localStorage.getItem(KEY)).toBeNull();
+  });
+
+  test('quarantines unparseable JSON', () => {
+    localStorage.setItem(KEY, '{not json');
+    expect(load()).toBeNull();
+    expect(localStorage.getItem(CORRUPT)).toBe('{not json');
+  });
+
+  test('a second quarantine does not destroy the first backup', () => {
+    localStorage.setItem(KEY, 'first');
+    load();
+    localStorage.setItem(KEY, 'second');
+    load();
+    expect(localStorage.getItem(CORRUPT)).toBe('first');
+  });
+
+  test('rejects a session whose status is not one of the two literals', () => {
+    localStorage.setItem(KEY, JSON.stringify({ ...session(), status: 'halfway' }));
+    expect(load()).toBeNull();
+  });
 });
 
-describe('Store', () => {
-  test('get returns the initial state', () => {
-    const s = new Store({ count: 0 }, 'key');
-    expect(s.get()).toEqual({ count: 0 });
-  });
-
-  test('set updates state and notifies subscribers', () => {
-    const s = new Store({ count: 0 }, 'key');
-    let observed = -1;
-    s.subscribe((v) => {
-      observed = v.count;
-    });
-    s.set((cur) => ({ ...cur, count: 7 }));
-    expect(observed).toBe(7);
-  });
-
-  test('persists to localStorage', () => {
-    const s = new Store({ count: 0 }, 'persist-key');
-    s.set((cur) => ({ ...cur, count: 9 }));
-    const raw = localStorage.getItem('persist-key');
-    expect(raw).toBe(JSON.stringify({ count: 9 }));
-  });
-
-  test('hydrates from localStorage on construction', () => {
-    localStorage.setItem('h-key', JSON.stringify({ count: 42 }));
-    const s = new Store({ count: 0 }, 'h-key');
-    expect(s.get()).toEqual({ count: 42 });
-  });
-
-  test('falls back to initial state and moves corrupt payload to a backup key', () => {
-    localStorage.setItem('bad-key', '{not json');
-    const s = new Store({ count: 0 }, 'bad-key');
-    expect(s.get()).toEqual({ count: 0 });
-    expect(localStorage.getItem('bad-key')).toBeNull();
-    expect(localStorage.getItem('bad-key.corrupt')).toBe('{not json');
-  });
-
-  test('treats valid-JSON wrong-shape values (e.g. "null") as corrupt', () => {
-    localStorage.setItem('null-key', 'null');
-    const s = new Store({ count: 0 }, 'null-key');
-    expect(s.get()).toEqual({ count: 0 });
-    expect(localStorage.getItem('null-key')).toBeNull();
-    expect(localStorage.getItem('null-key.corrupt')).toBe('null');
-  });
-
-  test('rejects values failing a caller-provided validator', () => {
-    localStorage.setItem('v-key', JSON.stringify({ wrong: true }));
-    const s = new Store({ count: 0 }, 'v-key', (v): v is { count: number } => {
-      return typeof v === 'object' && v !== null && 'count' in v;
-    });
-    expect(s.get()).toEqual({ count: 0 });
-    expect(localStorage.getItem('v-key.corrupt')).toBe(JSON.stringify({ wrong: true }));
-  });
-
-  test('accepts values passing a caller-provided validator', () => {
-    localStorage.setItem('v-ok-key', JSON.stringify({ count: 5 }));
-    const s = new Store({ count: 0 }, 'v-ok-key', (v): v is { count: number } => {
-      return typeof v === 'object' && v !== null && 'count' in v;
-    });
-    expect(s.get()).toEqual({ count: 5 });
-  });
-
-  test('survives a localStorage that throws on access (SecurityError)', () => {
+describe('hostile storage', () => {
+  test('survives localStorage that throws on access (SecurityError)', () => {
+    // Throws on the property *read*, so nothing downstream is ever reached.
     Object.defineProperty(globalThis, 'localStorage', {
       get() {
         throw new Error('SecurityError: access denied');
       },
       configurable: true,
     });
-    try {
-      const s = new Store({ count: 0 }, 'sec-key');
-      expect(s.get()).toEqual({ count: 0 });
-      s.set((c) => ({ ...c, count: 1 }));
-      expect(s.get()).toEqual({ count: 1 });
-      s.clear({ count: 0 });
-      expect(s.get()).toEqual({ count: 0 });
-    } finally {
-      Object.defineProperty(globalThis, 'localStorage', {
-        value: new FakeStorage() as unknown as Storage,
-        configurable: true,
-        writable: true,
-      });
-    }
+    expect(load()).toBeNull();
+    expect(save(session())).toBe(false);
+    expect(clear()).toBe(false);
   });
 
-  test('clear removes from localStorage and resets in-memory to provided value', () => {
-    const s = new Store({ count: 1 }, 'c-key');
-    s.set((cur) => ({ ...cur, count: 99 }));
-    s.clear({ count: 0 });
-    expect(s.get()).toEqual({ count: 0 });
-    expect(localStorage.getItem('c-key')).toBeNull();
+  test('save reports failure rather than throwing when the write is refused', () => {
+    // The case the old suite claimed to cover but never reached: reads work,
+    // writes throw. This is what a full quota looks like.
+    const quota = new FakeStorage() as unknown as Storage;
+    quota.setItem = () => {
+      throw new Error('QuotaExceededError');
+    };
+    install(quota);
+    expect(() => save(session())).not.toThrow();
+    expect(save(session())).toBe(false);
   });
 
-  test('subscribe returns an unsubscribe function', () => {
-    const s = new Store({ count: 0 }, 'u-key');
-    let calls = 0;
-    const unsub = s.subscribe(() => {
-      calls++;
-    });
-    s.set((c) => ({ ...c, count: 1 }));
-    unsub();
-    s.set((c) => ({ ...c, count: 2 }));
-    expect(calls).toBe(1);
+  test('clear reports failure rather than throwing when removal is refused', () => {
+    const hostile = new FakeStorage() as unknown as Storage;
+    hostile.removeItem = () => {
+      throw new Error('SecurityError');
+    };
+    install(hostile);
+    expect(() => clear()).not.toThrow();
+    expect(clear()).toBe(false);
+  });
+
+  test('a quarantine that cannot be written leaves the original in place', () => {
+    const readOnly = new FakeStorage() as unknown as Storage;
+    readOnly.setItem('quill.session.v1', '{not json');
+    readOnly.setItem = () => {
+      throw new Error('QuotaExceededError');
+    };
+    install(readOnly);
+    expect(load()).toBeNull();
+    expect(readOnly.getItem(KEY)).toBe('{not json');
   });
 });

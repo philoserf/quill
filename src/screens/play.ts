@@ -18,7 +18,7 @@ import {
 } from '../scoring';
 import type { Attribute, Character, GameSession, Paragraph, Scenario, Skill } from '../types';
 import { PARAGRAPHS_PER_LETTER } from '../types';
-import { renderLetterhead } from './letterhead';
+import { renderLetterhead, renderScenarioDetail } from './fragments';
 
 export interface PlayCtx {
   session: GameSession;
@@ -637,7 +637,10 @@ function renderMarginaliaReferenceCard(v: PlayView): HTMLElement {
   // Toggling is purely local UI — flip the panel in place rather than
   // v.repaint(), which would rebuild the play subtree and destroy e.g. a
   // mid-shake roll button.
-  const panel = renderRecallPanel(v.scenario);
+  const panel = renderScenarioDetail(v.scenario, {
+    className: 'recall-panel',
+    headingClass: 'small-caps',
+  });
   panel.hidden = !v.state.recallOpen;
   card.appendChild(panel);
   toggle.addEventListener('click', () => {
@@ -647,31 +650,4 @@ function renderMarginaliaReferenceCard(v: PlayView): HTMLElement {
   });
 
   return card;
-}
-
-function renderRecallPanel(scenario: Scenario): HTMLElement {
-  const panel = document.createElement('div');
-  panel.className = 'recall-panel';
-  for (const p of scenario.profile) {
-    const para = document.createElement('p');
-    para.textContent = p;
-    panel.appendChild(para);
-  }
-  const rulesHeading = document.createElement('p');
-  rulesHeading.className = 'small-caps';
-  rulesHeading.textContent = 'Rules of Correspondence';
-  panel.appendChild(rulesHeading);
-  if (scenario.rulesOfCorrespondence.length === 0) {
-    const none = document.createElement('p');
-    none.textContent = 'None.';
-    panel.appendChild(none);
-  } else {
-    for (const r of scenario.rulesOfCorrespondence) {
-      const para = document.createElement('p');
-      para.className = 'rule';
-      para.textContent = r.description;
-      panel.appendChild(para);
-    }
-  }
-  return panel;
 }

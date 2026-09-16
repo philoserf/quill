@@ -6,9 +6,9 @@
     "dev": "bun ./public/index.html",
     "build": "bun build ./public/index.html --outdir dist && cp public/CNAME dist/CNAME",
     "test": "bun test",
-    "check": "biome check --write .",
-    "check:ci": "biome check . && tsc --noEmit && bun test",
-    "format": "biome format --write .",
+    "check": "biome check --write . && prettier --write \"**/*.md\"",
+    "check:ci": "biome check . && prettier --check \"**/*.md\" && tsc --noEmit && bun test",
+    "format": "biome format --write . && prettier --write \"**/*.md\"",
     "prepare": "simple-git-hooks"
   },
   "simple-git-hooks": {
@@ -17,6 +17,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.11",
     "@types/bun": "^1.4.0",
+    "prettier": "^3.9.7",
     "simple-git-hooks": "^2.14.0",
     "typescript": "^7.0.2"
   }

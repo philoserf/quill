@@ -1,4 +1,5 @@
 import { characterById, skillById } from './data';
+import { commitParagraph } from './paragraph';
 import { SCENARIOS } from './scenarios';
 import { renderPlay } from './screens/play';
 import { renderScore } from './screens/score';
@@ -73,17 +74,24 @@ function mount(scenarios: Scenario[]) {
       return;
     }
 
+    // hydrate() proved all three resolve; the screens are handed the values so
+    // they never look them up again or branch on a failure that cannot happen.
     const current = session;
     const scenario = scenarios.find((s) => s.id === current.scenarioId);
-    if (!scenario) throw new Error(`Unknown scenario: ${current.scenarioId}`);
+    const character = characterById(current.characterId);
+    const skill = skillById(current.skillId);
+    if (!scenario || !character || !skill) {
+      throw new Error(`Session ${current.id} references data that no longer exists`);
+    }
 
     if (current.status === 'in_progress') {
       rootEl.appendChild(
         renderPlay({
           session: current,
           scenario,
-          repaint: render,
-          onUpdate: (updater) => commit(updater(current)),
+          character,
+          skill,
+          onCommit: (paragraph) => commit(commitParagraph(current, paragraph)),
         }),
       );
     } else {
@@ -91,6 +99,8 @@ function mount(scenarios: Scenario[]) {
         renderScore({
           session: current,
           scenario,
+          character,
+          skill,
           onRestart: () => commit(null),
         }),
       );

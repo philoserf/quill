@@ -1,5 +1,15 @@
 import { characterById, skillById } from '../data';
 import { isSuccess, roll } from '../dice';
+import type { Draft } from '../paragraph';
+import {
+  advance,
+  commitParagraph,
+  draftToParagraph,
+  EMPTY_PARAGRAPH,
+  emptyDraft,
+  type PhaseName,
+  STEP_INDEX,
+} from '../paragraph';
 import { planRoll } from '../rules';
 import {
   fineHand,
@@ -8,7 +18,7 @@ import {
   isSuperior,
   paragraphPoints,
 } from '../scoring';
-import type { GameSession, Paragraph, Scenario } from '../types';
+import type { GameSession, Scenario } from '../types';
 import { PARAGRAPHS_PER_LETTER } from '../types';
 import { renderLetterhead } from './letterhead';
 
@@ -19,56 +29,6 @@ export interface PlayCtx {
    *  durable state — only a committed paragraph is. */
   repaint: () => void;
   onUpdate: (updater: (s: GameSession) => GameSession) => void;
-}
-
-type PhaseName =
-  | 'PICK_WORD'
-  | 'DECIDE_FLOURISH'
-  | 'ROLL_HEART'
-  | 'ROLL_LANGUAGE'
-  | 'WRITE'
-  | 'ROLL_PENMANSHIP'
-  | 'PARAGRAPH_DONE';
-
-interface Draft {
-  phase: PhaseName;
-  inkPotIndex: number | null;
-  flourishAdjective: string;
-  heartRoll: number[] | null;
-  languageRoll: number[] | null;
-  penmanshipRoll: number[] | null;
-  text: string;
-  skillUsedHere: 'penmanship' | 'language' | 'heart' | null;
-}
-
-function emptyDraft(): Draft {
-  return {
-    phase: 'PICK_WORD',
-    inkPotIndex: null,
-    flourishAdjective: '',
-    heartRoll: null,
-    languageRoll: null,
-    penmanshipRoll: null,
-    text: '',
-    skillUsedHere: null,
-  };
-}
-
-// The single Draft -> Paragraph mapping. The done step needs a Paragraph twice —
-// once to preview the points, once to commit the record — and a second copy of
-// this mapping would let the previewed score drift from the recorded one.
-// Returns null when the draft is not yet complete enough to score.
-function draftToParagraph(d: Draft): Paragraph | null {
-  if (d.inkPotIndex === null || d.languageRoll === null || d.penmanshipRoll === null) return null;
-  return {
-    inkPotIndex: d.inkPotIndex,
-    flourishAdjective: d.flourishAdjective.trim() ? d.flourishAdjective : null,
-    heartRoll: d.heartRoll,
-    languageRoll: d.languageRoll,
-    penmanshipRoll: d.penmanshipRoll,
-    skillUsedHere: d.skillUsedHere,
-    text: d.text,
-  };
 }
 
 const ROMAN = ['I', 'II', 'III', 'IV', 'V'] as const satisfies {
@@ -255,8 +215,7 @@ function renderInkPotCard(ctx: PlayCtx): HTMLElement {
 
     if (pickable) {
       btn.addEventListener('click', () => {
-        currentDraft.inkPotIndex = idx;
-        currentDraft.phase = 'DECIDE_FLOURISH';
+        currentDraft = advance(currentDraft, { type: 'pickWord', inkPotIndex: idx });
         rerender(ctx);
       });
     }
@@ -276,7 +235,7 @@ function renderLetter(ctx: PlayCtx): HTMLElement {
   for (const p of ctx.session.paragraphs) {
     const para = document.createElement('p');
     para.className = 'letter-paragraph';
-    para.textContent = p.text || '(empty paragraph)';
+    para.textContent = p.text || EMPTY_PARAGRAPH;
     letter.appendChild(para);
   }
 
@@ -312,7 +271,7 @@ function renderLetterDraftSlot(ctx: PlayCtx): HTMLElement {
     case 'PARAGRAPH_DONE': {
       const p = document.createElement('p');
       p.className = 'letter-paragraph';
-      p.textContent = currentDraft.text || '(empty paragraph)';
+      p.textContent = currentDraft.text || EMPTY_PARAGRAPH;
       wrap.appendChild(p);
       break;
     }
@@ -369,7 +328,7 @@ function renderWriteSlot(ctx: PlayCtx): HTMLElement {
   next.className = 'btn btn--primary';
   next.textContent = 'Finish paragraph';
   next.addEventListener('click', () => {
-    currentDraft.phase = 'ROLL_PENMANSHIP';
+    currentDraft = advance(currentDraft, { type: 'finishParagraph' });
     rerender(ctx);
   });
   wrap.appendChild(next);
@@ -384,28 +343,10 @@ function renderMarginalia(ctx: PlayCtx): HTMLElement {
   return wrap;
 }
 
-function stepIndexForPhase(phase: PhaseName): number {
-  switch (phase) {
-    case 'PICK_WORD':
-      return 0;
-    case 'DECIDE_FLOURISH':
-    case 'ROLL_HEART':
-      return 1;
-    case 'ROLL_LANGUAGE':
-      return 2;
-    case 'WRITE':
-      return 3;
-    case 'ROLL_PENMANSHIP':
-      return 4;
-    case 'PARAGRAPH_DONE':
-      return 5;
-  }
-}
-
 function renderStepper(phase: PhaseName): HTMLElement {
   const row = document.createElement('div');
   row.className = 'stepper';
-  const active = stepIndexForPhase(phase);
+  const active = STEP_INDEX[phase];
   STEP_LABELS.forEach((label, i) => {
     const cell = document.createElement('span');
     const state =
@@ -485,7 +426,7 @@ function renderStepFlourish(ctx: PlayCtx): HTMLElement {
       input.focus();
       return;
     }
-    currentDraft.phase = 'ROLL_HEART';
+    currentDraft = advance(currentDraft, { type: 'attemptFlourish' });
     rerender(ctx);
   });
 
@@ -494,8 +435,7 @@ function renderStepFlourish(ctx: PlayCtx): HTMLElement {
   skip.className = 'btn';
   skip.textContent = 'Write plainly';
   skip.addEventListener('click', () => {
-    currentDraft.flourishAdjective = '';
-    currentDraft.phase = 'ROLL_LANGUAGE';
+    currentDraft = advance(currentDraft, { type: 'writePlainly' });
     rerender(ctx);
   });
 
@@ -576,8 +516,7 @@ function renderRollHeartStep(ctx: PlayCtx): HTMLElement {
     'heart',
     `to see if the flourish "${currentDraft.flourishAdjective}" holds.`,
     (dice) => {
-      currentDraft.heartRoll = dice;
-      currentDraft.phase = 'ROLL_LANGUAGE';
+      currentDraft = advance(currentDraft, { type: 'rolled', attribute: 'heart', dice });
     },
   );
 }
@@ -599,8 +538,7 @@ function renderRollLanguageStep(ctx: PlayCtx): HTMLElement {
     'language',
     'to determine whether you draw the superior word.',
     (dice) => {
-      currentDraft.languageRoll = dice;
-      currentDraft.phase = 'WRITE';
+      currentDraft = advance(currentDraft, { type: 'rolled', attribute: 'language', dice });
     },
     verdict,
   );
@@ -623,8 +561,7 @@ function renderRollPenmanshipStep(ctx: PlayCtx): HTMLElement {
     'penmanship',
     'for a fine hand.',
     (dice) => {
-      currentDraft.penmanshipRoll = dice;
-      currentDraft.phase = 'PARAGRAPH_DONE';
+      currentDraft = advance(currentDraft, { type: 'rolled', attribute: 'penmanship', dice });
     },
     verdict,
   );
@@ -684,13 +621,7 @@ function renderStepDone(ctx: PlayCtx): HTMLElement {
     // which triggers a re-render that reads currentDraft.phase. If we reset after,
     // the re-render shows PARAGRAPH_DONE again and the player has to reload.
     currentDraft = emptyDraft();
-    ctx.onUpdate((s) => {
-      const skillSpent = s.skillSpent || newPara.skillUsedHere !== null;
-      const paragraphs = [...s.paragraphs, newPara];
-      const status: 'in_progress' | 'finished' =
-        paragraphs.length >= PARAGRAPHS_PER_LETTER ? 'finished' : 'in_progress';
-      return { ...s, paragraphs, skillSpent, status };
-    });
+    ctx.onUpdate((s) => commitParagraph(s, newPara));
   });
   wrap.appendChild(next);
   return wrap;

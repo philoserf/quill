@@ -114,4 +114,20 @@ describe('toMarkdown', () => {
     expect(md).toContain('**Total**: 5 / tepid');
     expect(md).toContain('> Mild offence is taken.');
   });
+
+  test('an empty paragraph exports as a placeholder, not as blank lines', () => {
+    // Committing an empty paragraph is permitted, but the exported letter used
+    // to carry a run of blank lines while the game record below still reported
+    // words, rolls and points for it.
+    const empty = {
+      ...session,
+      paragraphs: [
+        must(session.paragraphs[0], 'p1'),
+        { ...must(session.paragraphs[1], 'p2'), text: '' },
+      ],
+    };
+    const md = toMarkdown(empty, scenario, CHARACTERS, SKILLS);
+    expect(md).toContain('(empty paragraph)');
+    expect(md).not.toMatch(/\n\n\n\n/);
+  });
 });

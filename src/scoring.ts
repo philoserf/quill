@@ -16,8 +16,10 @@ export function isSuperior(languageRoll: number[]): boolean {
   return countSuccesses(languageRoll) > 0;
 }
 
-export function flourishHeld(attemptedFlourish: boolean, heartRoll: number[] | null): boolean {
-  return attemptedFlourish && heartRoll !== null && countSuccesses(heartRoll) > 0;
+// A heart roll exists only on the flourish path, so its presence *is* the
+// attempt. See Paragraph: flourishAdjective and heartRoll agree by construction.
+export function flourishHeld(heartRoll: number[] | null): boolean {
+  return heartRoll !== null && countSuccesses(heartRoll) > 0;
 }
 
 export function fineHand(penmanshipRoll: number[]): boolean {
@@ -26,7 +28,7 @@ export function fineHand(penmanshipRoll: number[]): boolean {
 
 export function paragraphPoints(p: Paragraph): number {
   const superior = isSuperior(p.languageRoll);
-  const flourishApplied = flourishHeld(p.attemptedFlourish, p.heartRoll);
+  const flourishApplied = flourishHeld(p.heartRoll);
 
   let pts: number;
   if (flourishApplied && superior) pts = 2;

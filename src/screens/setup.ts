@@ -131,13 +131,6 @@ export function renderSetup(ctx: SetupCtx): HTMLElement {
   return root;
 }
 
-/** The three selection steps are one rendering rule with a different noun.
- *
- *  Card children are phrasing content on purpose: `<button>`'s content model
- *  forbids headings, paragraphs and lists, and assistive technology builds the
- *  accessible name from the subtree — so a card with an `<h3>` plus a flavour
- *  paragraph plus pip labels announced as all of it at once. The `aria-label`
- *  below is the name; everything else is presentation. */
 /** The card id, shared between the builder below and the focus restoration in
  *  `renderSetup` — selecting re-renders the whole screen, so the card that was
  *  focused has to be found again by name. */

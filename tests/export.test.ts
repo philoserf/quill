@@ -61,7 +61,8 @@ describe('toMarkdown', () => {
     const md = toMarkdown(session, scenario, character, skill);
     expect(md).toContain('character: The Monk');
     expect(md).toContain('skill: Illumination');
-    expect(md).toContain('scenario: The Archduke');
+    // Quoted so a title carrying a colon or a leading dash stays valid YAML.
+    expect(md).toContain('scenario: "The Archduke"');
     expect(md).toContain('score: 5');
     expect(md).toContain('consequence: tepid');
   });
@@ -134,5 +135,47 @@ describe('toMarkdown', () => {
     const md = toMarkdown(empty, scenario, character, skill);
     expect(md).toContain('(empty paragraph)');
     expect(md).not.toMatch(/\n\n\n\n/);
+  });
+
+  test('a pipe in the flourish word does not add a table cell', () => {
+    // The flourish input has no pattern or sanitisation, so this is whatever
+    // the player typed. An unescaped pipe used to shift every cell after it.
+    const withPipe = {
+      ...session,
+      paragraphs: [{ ...must(session.paragraphs[0], 'p1'), flourishAdjective: 'bold | brazen' }],
+    };
+    const md = toMarkdown(withPipe, scenario, character, skill);
+    const row = must(
+      md.split('\n').find((l) => l.startsWith('| 1 |')),
+      'expected row 1',
+    );
+    // Compared against the header rather than a magic number: the point is
+    // that the row still has the table's shape.
+    const header = must(
+      md.split('\n').find((l) => l.startsWith('| # |')),
+      'expected the table header',
+    );
+    const cells = (line: string) => line.split(/(?<!\\)\|/).length;
+    expect(cells(row)).toBe(cells(header));
+    expect(row).toContain('bold \\| brazen');
+  });
+
+  test('a newline in the flourish word does not split the row', () => {
+    const withNewline = {
+      ...session,
+      paragraphs: [{ ...must(session.paragraphs[0], 'p1'), flourishAdjective: 'bold\nbrazen' }],
+    };
+    const md = toMarkdown(withNewline, scenario, character, skill);
+    expect(md.split('\n').filter((l) => l.startsWith('| 1 |'))).toHaveLength(1);
+    expect(md).toContain('bold brazen');
+  });
+
+  test('a scenario title with a colon stays a valid frontmatter scalar', () => {
+    const awkward = scenarioFixture({
+      ...scenario,
+      title: 'The Archduke: a reply',
+    });
+    const md = toMarkdown(session, awkward, character, skill);
+    expect(md).toContain('scenario: "The Archduke: a reply"');
   });
 });

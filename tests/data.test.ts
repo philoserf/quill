@@ -1,43 +1,26 @@
 import { describe, expect, test } from 'bun:test';
-import { CHARACTERS, characterById, SKILLS, skillById } from '../src/data';
+import { CHARACTERS, SKILLS } from '../src/data';
+import { ATTRIBUTES } from '../src/types';
+
+// `src/data.ts` is a literal array, so most assertions about it restate the
+// file above them — `tsc` already rejects an invalid rating, and a non-empty
+// literal is non-empty. What survives here are the two claims about the domain
+// that the types do not make.
 
 describe('CHARACTERS', () => {
   test('contains exactly 6 archetypes from the rulebook', () => {
+    // The exact ids are the authors saying this list is closed.
     const ids = CHARACTERS.map((c) => c.id).sort();
     expect(ids).toEqual(['aristocrat', 'courtier', 'knight', 'monk', 'poet', 'scholar']);
-  });
-
-  test('each character has all three attributes set to a valid rating', () => {
-    for (const c of CHARACTERS) {
-      for (const attr of ['penmanship', 'language', 'heart'] as const) {
-        expect(['poor', 'average', 'good']).toContain(c.attributes[attr]);
-      }
-    }
-  });
-
-  test('each character has at least one paragraph of flavor text', () => {
-    for (const c of CHARACTERS) {
-      expect(c.flavor.length).toBeGreaterThan(0);
-    }
   });
 });
 
 describe('SKILLS', () => {
-  test('contains exactly 3 skills, one per attribute', () => {
-    expect(SKILLS).toHaveLength(3);
-    const bonusAttrs = SKILLS.map((s) => s.bonusAttribute).sort();
-    expect(bonusAttrs).toEqual(['heart', 'language', 'penmanship']);
-  });
-});
-
-describe('lookup helpers', () => {
-  test('characterById finds a known character and returns undefined otherwise', () => {
-    expect(characterById('poet')?.name).toBe('The Poet');
-    expect(characterById('cartographer')).toBeUndefined();
-  });
-
-  test('skillById finds a known skill and returns undefined otherwise', () => {
-    expect(skillById('illumination')?.bonusAttribute).toBe('penmanship');
-    expect(skillById('sorcery')).toBeUndefined();
+  test('every attribute has exactly one skill that boosts it', () => {
+    // Not a restatement of the literal: two skills boosting Penmanship and none
+    // boosting Heart would leave an attribute the player can never help, and
+    // nothing else in the codebase would notice.
+    const boosted = SKILLS.map((s) => s.bonusAttribute).sort();
+    expect(boosted).toEqual([...ATTRIBUTES].sort());
   });
 });

@@ -1,4 +1,4 @@
-import { isSuccess, roll } from '../dice';
+import { isSuccess, roll, succeeded } from '../dice';
 import type { Draft } from '../paragraph';
 import {
   advance,
@@ -9,13 +9,7 @@ import {
   STEP_INDEX,
 } from '../paragraph';
 import { applyReroll, planRoll } from '../rules';
-import {
-  fineHand,
-  flourishHeld,
-  formatSignedPoints,
-  isSuperior,
-  paragraphPoints,
-} from '../scoring';
+import { formatSignedPoints, paragraphPoints } from '../scoring';
 import type { Attribute, Character, GameSession, Paragraph, Scenario, Skill } from '../types';
 import { PARAGRAPHS_PER_LETTER } from '../types';
 import { renderLetterhead, renderScenarioDetail } from './fragments';
@@ -180,7 +174,7 @@ function renderInkPotCard(v: PlayView): HTMLElement {
       btn.append(
         entry.inferior,
         ' ',
-        smallCaps(isSuperior(used.languageRoll) ? '→ superior' : '→ inferior'),
+        smallCaps(succeeded(used.languageRoll) ? '→ superior' : '→ inferior'),
       );
     } else if (chosen) {
       btn.classList.add('inkpot-item--chosen');
@@ -264,8 +258,8 @@ function renderWriteSlot(v: PlayView): HTMLElement {
     return internalError('Internal error: ink pot entry missing.');
   }
   const wrap = document.createElement('div');
-  const word = isSuperior(v.state.draft.languageRoll) ? pair.superior : pair.inferior;
-  const flourishApplied = flourishHeld(v.state.draft.heartRoll);
+  const word = succeeded(v.state.draft.languageRoll) ? pair.superior : pair.inferior;
+  const flourishApplied = succeeded(v.state.draft.heartRoll);
   const required =
     flourishApplied && v.state.draft.flourishAdjective
       ? `${v.state.draft.flourishAdjective} ${word}`
@@ -497,7 +491,7 @@ function renderRollHeartStep(v: PlayView): HTMLElement {
 function renderRollLanguageStep(v: PlayView): HTMLElement {
   let verdict: HTMLElement | undefined;
   if (v.state.draft.heartRoll) {
-    const held = flourishHeld(v.state.draft.heartRoll);
+    const held = succeeded(v.state.draft.heartRoll);
     verdict = makeRollVerdict(
       v.state.draft.heartRoll,
       held,
@@ -523,7 +517,7 @@ function renderRollPenmanshipStep(v: PlayView): HTMLElement {
   if (!pair || v.state.draft.languageRoll === null) {
     return internalError('Internal error: missing ink pot entry or language roll.');
   }
-  const superior = isSuperior(v.state.draft.languageRoll);
+  const superior = succeeded(v.state.draft.languageRoll);
   const verdict = makeRollVerdict(
     v.state.draft.languageRoll,
     superior,
@@ -548,9 +542,9 @@ function renderStepDone(v: PlayView): HTMLElement {
   }
   const wrap = document.createElement('div');
   wrap.className = 'done-summary';
-  const superior = isSuperior(para.languageRoll);
-  const flourishApplied = flourishHeld(para.heartRoll);
-  const penOk = fineHand(para.penmanshipRoll);
+  const superior = succeeded(para.languageRoll);
+  const flourishApplied = succeeded(para.heartRoll);
+  const penOk = succeeded(para.penmanshipRoll);
   const pts = paragraphPoints(para);
 
   const penLine = document.createElement('p');

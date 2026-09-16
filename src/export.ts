@@ -1,8 +1,23 @@
+import { succeeded } from './dice';
 import { EMPTY_PARAGRAPH } from './paragraph';
-import { flourishHeld, isSuperior, score } from './scoring';
+import { score } from './scoring';
 import type { Character, GameSession, Paragraph, Scenario, Skill } from './types';
 
 const EMDASH = '—';
+
+/** Player text reaches the game-record table unmodified, and the flourish input
+ *  has no pattern or sanitisation. A literal pipe adds a cell; a pasted newline
+ *  splits the row and terminates the table early. */
+function escapeCell(text: string): string {
+  return text.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+}
+
+/** Frontmatter scalars are unquoted, so a scenario title carrying a colon or a
+ *  leading dash writes an invalid document. All four bundled titles are plain;
+ *  this is for the next one. */
+function yamlScalar(text: string): string {
+  return `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
 
 function rollCell(values: number[] | null): string {
   return values && values.length > 0 ? values.join(',') : EMDASH;
@@ -11,13 +26,14 @@ function rollCell(values: number[] | null): string {
 function paragraphRow(p: Paragraph, idx: number, scenario: Scenario, points: number): string {
   const pair = scenario.inkPot[p.inkPotIndex];
   const word = pair
-    ? isSuperior(p.languageRoll)
-      ? `${pair.superior} (superior)`
-      : `${pair.inferior} (inferior)`
+    ? succeeded(p.languageRoll)
+      ? `${escapeCell(pair.superior)} (superior)`
+      : `${escapeCell(pair.inferior)} (inferior)`
     : EMDASH;
   // Only a flourish that held is reported — an attempt whose Heart roll failed
   // earns nothing and is not shown, matching the play screen's done summary.
-  const flourish = flourishHeld(p.heartRoll) && p.flourishAdjective ? p.flourishAdjective : EMDASH;
+  const flourish =
+    succeeded(p.heartRoll) && p.flourishAdjective ? escapeCell(p.flourishAdjective) : EMDASH;
   return `| ${idx + 1} | ${word} | ${flourish} | ${rollCell(p.heartRoll)} | ${rollCell(p.languageRoll)} | ${rollCell(p.penmanshipRoll)} | ${points} |`;
 }
 
@@ -35,7 +51,7 @@ export function toMarkdown(
     `date: ${date}`,
     `character: ${character.name}`,
     `skill: ${skill.name}`,
-    `scenario: ${scenario.title}`,
+    `scenario: ${yamlScalar(scenario.title)}`,
     `score: ${result.total}`,
     `consequence: ${result.tierName}`,
     '---',

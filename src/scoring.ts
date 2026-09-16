@@ -1,4 +1,4 @@
-import { countSuccesses } from './dice';
+import { succeeded } from './dice';
 import type { GameSession, Paragraph, TierName } from './types';
 import { LOWEST_TIER, TIERS } from './types';
 
@@ -12,23 +12,9 @@ export function formatSignedPoints(pts: number): string {
   return pts > 0 ? `+${pts}` : String(pts);
 }
 
-export function isSuperior(languageRoll: number[]): boolean {
-  return countSuccesses(languageRoll) > 0;
-}
-
-// A heart roll exists only on the flourish path, so its presence *is* the
-// attempt. See Paragraph: flourishAdjective and heartRoll agree by construction.
-export function flourishHeld(heartRoll: number[] | null): boolean {
-  return heartRoll !== null && countSuccesses(heartRoll) > 0;
-}
-
-export function fineHand(penmanshipRoll: number[]): boolean {
-  return countSuccesses(penmanshipRoll) > 0;
-}
-
 export function paragraphPoints(p: Paragraph): number {
-  const superior = isSuperior(p.languageRoll);
-  const flourishApplied = flourishHeld(p.heartRoll);
+  const superior = succeeded(p.languageRoll);
+  const flourishApplied = succeeded(p.heartRoll);
 
   let pts: number;
   if (flourishApplied && superior) pts = 2;
@@ -36,7 +22,7 @@ export function paragraphPoints(p: Paragraph): number {
   else if (!flourishApplied && superior) pts = 1;
   else pts = 0;
 
-  if (fineHand(p.penmanshipRoll)) pts += 1;
+  if (succeeded(p.penmanshipRoll)) pts += 1;
   return pts;
 }
 

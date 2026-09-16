@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Formatting
+
+Two formatters, split by language and not interchangeable. **Biome owns TypeScript and JSON; prettier owns markdown** — Biome 2.5 does not process markdown at all, which is the whole reason prettier is here. Both run in `check`, `check:ci` and `format`, so markdown drift fails the pre-push hook like any other formatting.
+
+`.prettierrc.json` sets `embeddedLanguageFormatting: "off"`. That is load-bearing rather than stylistic: `WALKTHROUGH.md` quotes source verbatim, and at prettier's default of `"auto"` it reformats code inside fenced blocks to its own style — double quotes at width 80, against Biome's single quotes at 100 — so a quoted snippet silently stops matching the file it came from. `.prettierignore` excludes `.issues/`, which is ignored through the global `core.excludesfile` rather than this repo's `.gitignore` and so is invisible to git but not to prettier.
+
 ## Push and deploy
 
 `git push` runs `bun run check:ci` via a `simple-git-hooks` pre-push hook (config in `package.json`). Bypass with `SKIP_SIMPLE_GIT_HOOKS=1 git push` for emergencies. `.github/workflows/deploy.yml` is the only workflow: a `check` job runs the same suite on pushes and PRs to `main`, then `build` and `deploy` jobs run on pushes only and publish `dist/` to GitHub Pages, serving the site at `quill.philoserf.com`. PRs additionally run `bun run build`, which `check:ci` does not cover. The custom domain lives in `public/CNAME`, which `bun run build` copies to `dist/CNAME` — Bun only emits assets reachable from `public/index.html`, so the copy step is what keeps the domain bound across deploys. The domain is proxied through Cloudflare, which also injects the Web Analytics beacon at the edge — never add that snippet to `public/index.html`, or page views are counted twice. README's Deploy section documents the out-of-repo settings.
@@ -14,7 +20,7 @@ Vanilla TS SPA, no framework. Entry chain: `public/index.html` → `src/main.ts`
 
 **The paragraph machine** — `src/paragraph.ts` owns the seven-phase order as one event-keyed `advance(draft, event)`, plus `draftToParagraph` and `commitParagraph`. Events carry the data their transition records, so the order and the data flow have one home. It is the only part of the play loop with tests (`tests/paragraph.test.ts`); the screen around it has none.
 
-**Play screen draft state** — `renderPlay` owns the in-progress paragraph in its closure as `v.state.draft` and repaints its own subtree. It is **deliberately not persisted**: only completed paragraphs reach `session.paragraphs`, via `onCommit`. Committing discards the closure — `main.ts` builds a fresh `renderPlay` with a fresh draft — so there is no reset to sequence. `v.state` is one shared object per letter on purpose: the roll button's 250ms shake timer reads the draft *when it fires*, not a copy captured when its button was built, so a repaint mid-shake cannot land a roll on a draft nothing will see.
+**Play screen draft state** — `renderPlay` owns the in-progress paragraph in its closure as `v.state.draft` and repaints its own subtree. It is **deliberately not persisted**: only completed paragraphs reach `session.paragraphs`, via `onCommit`. Committing discards the closure — `main.ts` builds a fresh `renderPlay` with a fresh draft — so there is no reset to sequence. `v.state` is one shared object per letter on purpose: the roll button's 250ms shake timer reads the draft _when it fires_, not a copy captured when its button was built, so a repaint mid-shake cannot land a roll on a draft nothing will see.
 
 **Scenarios are typed constants** — `src/scenarios.ts` exports `SCENARIOS: Scenario[]`, transcribed from the Quill rulebook. There is no runtime validation: the `Scenario` type is the gate, so a malformed scenario is a compile error rather than a startup throw. **To add a scenario**: add an entry to `SCENARIOS`. What `tsc` cannot check lives in `tests/scenarios.test.ts` — ink pots holding at least `PARAGRAPHS_PER_LETTER` words, `dice_bonus` amounts being positive integers, and `appliesTo` naming real character ids. Note `bun test` alone does not type-check; `bun run check:ci` is what catches a malformed constant.
 

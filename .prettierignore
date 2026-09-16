@@ -1,0 +1,4 @@
+# Prettier honors .gitignore from its cwd, but `.issues/` is ignored through the
+# global core.excludesfile rather than this repo's .gitignore, so prettier sees
+# it and `check:ci` would fail on agent working notes that never ship.
+.issues/

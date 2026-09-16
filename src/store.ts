@@ -1,5 +1,7 @@
-type Updater<T> = (current: T) => T;
-type Listener<T> = (value: T) => void;
+import type { GameSession } from './types';
+
+const KEY = 'quill.session.v1';
+const CORRUPT_KEY = `${KEY}.corrupt`;
 
 // Even reading `localStorage` throws SecurityError when the browser blocks
 // site data (e.g. Chrome with cookies disabled), so every access goes
@@ -14,60 +16,76 @@ function storage(): Storage | null {
   }
 }
 
-export class Store<T> {
-  private state: T;
-  private listeners = new Set<Listener<T>>();
-  private readonly key: string;
+// What the render path actually dereferences. Weaker than this and a payload
+// that parses can still crash every render; the quarantine below is the point
+// of checking, since it preserves the payload instead of destroying it.
+function isSession(v: unknown): v is GameSession {
+  if (typeof v !== 'object' || v === null) return false;
+  const s = v as Record<string, unknown>;
+  return (
+    typeof s.id === 'string' &&
+    typeof s.startedAt === 'string' &&
+    typeof s.characterId === 'string' &&
+    typeof s.skillId === 'string' &&
+    typeof s.scenarioId === 'string' &&
+    typeof s.skillSpent === 'boolean' &&
+    Array.isArray(s.paragraphs) &&
+    (s.status === 'in_progress' || s.status === 'finished')
+  );
+}
 
-  constructor(initial: T, key: string, isValid?: (value: unknown) => value is T) {
-    this.key = key;
-    this.state = initial;
-    const store = storage();
-    const raw = store?.getItem(key) ?? null;
-    if (!store || raw === null) return;
-
-    try {
-      const parsed: unknown = JSON.parse(raw);
-      const ok = isValid ? isValid(parsed) : parsed !== null && typeof parsed === 'object';
-      if (!ok) throw new Error('persisted value has the wrong shape');
-      this.state = parsed as T;
-    } catch {
-      // Move the payload to a backup key rather than destroying the user's
-      // only copy; the next persist() overwrites the live key anyway. If the
-      // backup write fails, leave the original in place.
-      try {
-        store.setItem(`${key}.corrupt`, raw);
-        store.removeItem(key);
-      } catch {
-        // quota or security failure — keep the original rather than lose it
-      }
-    }
+// v1 wrapped the session in `{ session }`. `clear()` has always used
+// removeItem, so `{ session: null }` was never written — the only shapes that
+// can be on disk are absent or `{ session: GameSession }`.
+function unwrap(parsed: unknown): unknown {
+  if (typeof parsed === 'object' && parsed !== null && 'session' in parsed) {
+    return (parsed as { session: unknown }).session;
   }
+  return parsed;
+}
 
-  get(): T {
-    return this.state;
+function quarantine(store: Storage, raw: string): void {
+  try {
+    // Never overwrite an existing backup: the first quarantined letter is the
+    // one the player is most likely to still want.
+    if (store.getItem(CORRUPT_KEY) === null) store.setItem(CORRUPT_KEY, raw);
+    store.removeItem(KEY);
+  } catch {
+    // quota or security failure — keep the original rather than lose it
   }
+}
 
-  set(updater: Updater<T>): void {
-    this.state = updater(this.state);
-    for (const fn of this.listeners) fn(this.state);
-    this.persist();
-  }
+export function load(): GameSession | null {
+  const store = storage();
+  const raw = store?.getItem(KEY) ?? null;
+  if (!store || raw === null) return null;
 
-  subscribe(fn: Listener<T>): () => void {
-    this.listeners.add(fn);
-    return () => {
-      this.listeners.delete(fn);
-    };
+  try {
+    const value = unwrap(JSON.parse(raw) as unknown);
+    if (value === null) return null;
+    if (!isSession(value)) throw new Error('persisted session has the wrong shape');
+    return value;
+  } catch {
+    quarantine(store, raw);
+    return null;
   }
+}
 
-  clear(reset: T): void {
-    this.state = reset;
-    storage()?.removeItem(this.key);
-    for (const fn of this.listeners) fn(this.state);
+/** Returns false when the write was refused — a full quota, or a browser that
+ *  allows reads but not writes. The caller decides whether that is worth
+ *  telling the player; silently dropping it is what made this invisible. */
+export function save(session: GameSession | null): boolean {
+  const store = storage();
+  if (!store) return false;
+  try {
+    if (session === null) store.removeItem(KEY);
+    else store.setItem(KEY, JSON.stringify(session));
+    return true;
+  } catch {
+    return false;
   }
+}
 
-  private persist(): void {
-    storage()?.setItem(this.key, JSON.stringify(this.state));
-  }
+export function clear(): boolean {
+  return save(null);
 }

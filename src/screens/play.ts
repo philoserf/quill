@@ -15,6 +15,9 @@ import { renderLetterhead } from './letterhead';
 export interface PlayCtx {
   session: GameSession;
   scenario: Scenario;
+  /** Rebuild the screen without writing to storage. Phase transitions are not
+   *  durable state — only a committed paragraph is. */
+  repaint: () => void;
   onUpdate: (updater: (s: GameSession) => GameSession) => void;
 }
 
@@ -91,8 +94,7 @@ function ensureDraftFor(session: GameSession) {
 }
 
 function rerender(ctx: PlayCtx) {
-  // Trigger main app render by no-op session update.
-  ctx.onUpdate((s) => ({ ...s }));
+  ctx.repaint();
 }
 
 function smallCaps(text: string): HTMLElement {

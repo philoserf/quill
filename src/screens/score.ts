@@ -2,7 +2,7 @@ import { toMarkdown } from '../export';
 import { EMPTY_PARAGRAPH } from '../paragraph';
 import { fineHand, flourishHeld, formatSignedPoints, isSuperior, score } from '../scoring';
 import type { Character, GameSession, Scenario, Skill } from '../types';
-import { renderLetterhead } from './letterhead';
+import { renderLetterhead } from './fragments';
 
 export interface ScoreCtx {
   session: GameSession;

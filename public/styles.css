@@ -258,10 +258,19 @@ button:focus-visible {
   background: var(--paper-pressed);
 }
 
-.card h3,
-.card h4 {
+.card__title {
+  display: block;
   font-family: var(--display-font);
+  font-size: 1.17em;
+  font-weight: bold;
   margin: 0 0 0.5rem;
+}
+
+.card__blurb {
+  /* Reproduces the UA margins the <p> this replaced carried, so the card
+     metrics are unchanged by the demotion to phrasing content. */
+  display: block;
+  margin: 1em 0;
 }
 
 .attrs-pips {
@@ -273,7 +282,7 @@ button:focus-visible {
   margin: 0.75rem 0 0;
 }
 
-.attrs-pips li {
+.attrs-pips > span {
   font-size: 0.85rem;
 }
 
@@ -630,8 +639,10 @@ button:focus-visible {
   font-size: 0.9rem;
 }
 
-.recall-panel p {
+.recall-panel p,
+.recall-panel h4 {
   margin: 0.5rem 0;
+  font-size: inherit;
 }
 
 /* --- Score screen --- */

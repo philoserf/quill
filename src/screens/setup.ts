@@ -1,6 +1,7 @@
 import { CHARACTERS, SKILLS } from '../data';
 import { diceForRating } from '../dice';
-import type { Scenario } from '../types';
+import type { Character, Scenario } from '../types';
+import { renderScenarioDetail } from './fragments';
 
 export interface SetupCtx {
   scenarios: Scenario[];
@@ -34,13 +35,61 @@ export function renderSetup(ctx: SetupCtx): HTMLElement {
     titleBlock.append(title, subtitle, helper);
     root.appendChild(titleBlock);
 
-    root.appendChild(renderCharacterStep(state, () => render()));
+    root.appendChild(
+      renderChoiceStep({
+        title: 'I. The Character',
+        prompt: 'Who holds the quill?',
+        items: CHARACTERS,
+        selectedId: state.characterId,
+        name: (c) => c.name,
+        blurb: (c) => c.flavor[0] ?? '',
+        extra: renderAttributePips,
+        onSelect: (c) => {
+          state.characterId = c.id;
+          render();
+        },
+      }),
+    );
+
     if (state.characterId) {
-      root.appendChild(renderSkillStep(state, () => render()));
+      root.appendChild(
+        renderChoiceStep({
+          title: 'II. The Skill',
+          prompt: 'One gift, spent once per letter.',
+          items: SKILLS,
+          selectedId: state.skillId,
+          name: (s) => s.name,
+          blurb: (s) => s.description,
+          onSelect: (s) => {
+            state.skillId = s.id;
+            render();
+          },
+        }),
+      );
     }
+
     if (state.skillId) {
-      root.appendChild(renderScenarioStep(ctx.scenarios, state, () => render()));
+      const step = renderChoiceStep({
+        title: 'III. The Scenario',
+        prompt: 'To whom do you write, and why?',
+        items: ctx.scenarios,
+        selectedId: state.scenarioId,
+        name: (s) => s.title,
+        blurb: (s) => s.profile[0] ?? '',
+        onSelect: (s) => {
+          state.scenarioId = s.id;
+          render();
+        },
+      });
+      const chosen = ctx.scenarios.find((s) => s.id === state.scenarioId);
+      if (chosen) {
+        step.appendChild(
+          renderScenarioDetail(chosen, { className: 'scenario-detail', profileHeading: 'Profile' }),
+        );
+      }
+      root.appendChild(step);
     }
+
     if (state.scenarioId) {
       const beginRow = document.createElement('div');
       beginRow.className = 'begin-row';
@@ -66,160 +115,82 @@ export function renderSetup(ctx: SetupCtx): HTMLElement {
   return root;
 }
 
-function renderCharacterStep(state: SetupState, onChange: () => void): HTMLElement {
+/** The three selection steps are one rendering rule with a different noun.
+ *
+ *  Card children are phrasing content on purpose: `<button>`'s content model
+ *  forbids headings, paragraphs and lists, and assistive technology builds the
+ *  accessible name from the subtree — so a card with an `<h3>` plus a flavour
+ *  paragraph plus pip labels announced as all of it at once. The `aria-label`
+ *  below is the name; everything else is presentation. */
+function renderChoiceStep<T extends { id: string }>(opts: {
+  title: string;
+  prompt: string;
+  items: readonly T[];
+  selectedId: string | null;
+  name: (item: T) => string;
+  blurb: (item: T) => string;
+  extra?: (item: T) => HTMLElement;
+  onSelect: (item: T) => void;
+}): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'step paper';
+
   const h = document.createElement('h2');
-  h.textContent = 'I. The Character';
-  wrap.appendChild(h);
+  h.textContent = opts.title;
   const prompt = document.createElement('p');
   prompt.className = 'step__prompt';
-  prompt.textContent = 'Who holds the quill?';
-  wrap.appendChild(prompt);
+  prompt.textContent = opts.prompt;
+  wrap.append(h, prompt);
+
   const grid = document.createElement('div');
   grid.className = 'card-grid';
-  for (const c of CHARACTERS) {
+  for (const item of opts.items) {
+    const selected = opts.selectedId === item.id;
     const card = document.createElement('button');
     card.type = 'button';
-    card.className = `card${state.characterId === c.id ? ' card--selected' : ''}`;
+    card.className = `card${selected ? ' card--selected' : ''}`;
+    card.setAttribute('aria-label', opts.name(item));
+    card.setAttribute('aria-pressed', String(selected));
 
-    const heading = document.createElement('h3');
-    heading.textContent = c.name;
-    const blurb = document.createElement('p');
-    blurb.textContent = c.flavor[0] ?? '';
-    const attrs = document.createElement('ul');
-    attrs.className = 'attrs-pips';
-    for (const [label, rating] of [
-      ['Penmanship', c.attributes.penmanship],
-      ['Language', c.attributes.language],
-      ['Heart', c.attributes.heart],
-    ] as const) {
-      const li = document.createElement('li');
-      const labelEl = document.createElement('span');
-      labelEl.className = 'small-caps';
-      labelEl.textContent = label;
-      const pips = document.createElement('span');
-      pips.className = 'pips';
-      const level = diceForRating(rating);
-      for (let i = 0; i < 3; i++) {
-        const dot = document.createElement('span');
-        dot.className = i < level ? 'pip pip--filled' : 'pip';
-        dot.textContent = i < level ? '●' : '○';
-        pips.appendChild(dot);
-      }
-      li.append(labelEl, pips);
-      attrs.appendChild(li);
-    }
-    card.append(heading, blurb, attrs);
+    const title = document.createElement('span');
+    title.className = 'card__title';
+    title.textContent = opts.name(item);
+    const blurb = document.createElement('span');
+    blurb.className = 'card__blurb';
+    blurb.textContent = opts.blurb(item);
+    card.append(title, blurb);
+    if (opts.extra) card.appendChild(opts.extra(item));
 
-    card.addEventListener('click', () => {
-      state.characterId = c.id;
-      onChange();
-    });
+    card.addEventListener('click', () => opts.onSelect(item));
     grid.appendChild(card);
   }
   wrap.appendChild(grid);
   return wrap;
 }
 
-function renderSkillStep(state: SetupState, onChange: () => void): HTMLElement {
-  const wrap = document.createElement('div');
-  wrap.className = 'step paper';
-  const h = document.createElement('h2');
-  h.textContent = 'II. The Skill';
-  wrap.appendChild(h);
-  const prompt = document.createElement('p');
-  prompt.className = 'step__prompt';
-  prompt.textContent = 'One gift, spent once per letter.';
-  wrap.appendChild(prompt);
-  const grid = document.createElement('div');
-  grid.className = 'card-grid';
-  for (const s of SKILLS) {
-    const card = document.createElement('button');
-    card.type = 'button';
-    card.className = `card${state.skillId === s.id ? ' card--selected' : ''}`;
-    const heading = document.createElement('h3');
-    heading.textContent = s.name;
-    const desc = document.createElement('p');
-    desc.textContent = s.description;
-    card.append(heading, desc);
-    card.addEventListener('click', () => {
-      state.skillId = s.id;
-      onChange();
-    });
-    grid.appendChild(card);
-  }
-  wrap.appendChild(grid);
-  return wrap;
-}
-
-function renderScenarioStep(
-  scenarios: Scenario[],
-  state: SetupState,
-  onChange: () => void,
-): HTMLElement {
-  const wrap = document.createElement('div');
-  wrap.className = 'step paper';
-  const h = document.createElement('h2');
-  h.textContent = 'III. The Scenario';
-  wrap.appendChild(h);
-  const prompt = document.createElement('p');
-  prompt.className = 'step__prompt';
-  prompt.textContent = 'To whom do you write, and why?';
-  wrap.appendChild(prompt);
-
-  const grid = document.createElement('div');
-  grid.className = 'card-grid';
-  for (const sc of scenarios) {
-    const card = document.createElement('button');
-    card.type = 'button';
-    card.className = `card${state.scenarioId === sc.id ? ' card--selected' : ''}`;
-    const heading = document.createElement('h4');
-    heading.textContent = sc.title;
-    const blurb = document.createElement('p');
-    blurb.textContent = sc.profile[0] ?? '';
-    card.append(heading, blurb);
-    card.addEventListener('click', () => {
-      state.scenarioId = sc.id;
-      onChange();
-    });
-    grid.appendChild(card);
-  }
-  wrap.appendChild(grid);
-
-  if (state.scenarioId) {
-    const sc = scenarios.find((x) => x.id === state.scenarioId);
-    if (sc) {
-      const detail = document.createElement('div');
-      detail.className = 'scenario-detail';
-
-      const profileHeading = document.createElement('h4');
-      profileHeading.textContent = 'Profile';
-      detail.appendChild(profileHeading);
-      for (const p of sc.profile) {
-        const para = document.createElement('p');
-        para.textContent = p;
-        detail.appendChild(para);
-      }
-
-      const rulesHeading = document.createElement('h4');
-      rulesHeading.textContent = 'Rules of Correspondence';
-      detail.appendChild(rulesHeading);
-      if (sc.rulesOfCorrespondence.length === 0) {
-        const none = document.createElement('p');
-        none.textContent = 'None.';
-        detail.appendChild(none);
-      } else {
-        for (const r of sc.rulesOfCorrespondence) {
-          const para = document.createElement('p');
-          para.className = 'rule';
-          para.textContent = r.description;
-          detail.appendChild(para);
-        }
-      }
-
-      wrap.appendChild(detail);
+function renderAttributePips(c: Character): HTMLElement {
+  const attrs = document.createElement('span');
+  attrs.className = 'attrs-pips';
+  for (const [label, rating] of [
+    ['Penmanship', c.attributes.penmanship],
+    ['Language', c.attributes.language],
+    ['Heart', c.attributes.heart],
+  ] as const) {
+    const row = document.createElement('span');
+    const labelEl = document.createElement('span');
+    labelEl.className = 'small-caps';
+    labelEl.textContent = label;
+    const pips = document.createElement('span');
+    pips.className = 'pips';
+    const level = diceForRating(rating);
+    for (let i = 0; i < 3; i++) {
+      const dot = document.createElement('span');
+      dot.className = i < level ? 'pip pip--filled' : 'pip';
+      dot.textContent = i < level ? '●' : '○';
+      pips.appendChild(dot);
     }
+    row.append(labelEl, pips);
+    attrs.appendChild(row);
   }
-  return wrap;
+  return attrs;
 }

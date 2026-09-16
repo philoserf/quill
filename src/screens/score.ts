@@ -1,13 +1,14 @@
-import { CHARACTERS, characterById, SKILLS } from '../data';
 import { toMarkdown } from '../export';
 import { EMPTY_PARAGRAPH } from '../paragraph';
 import { fineHand, flourishHeld, formatSignedPoints, isSuperior, score } from '../scoring';
-import type { GameSession, Scenario } from '../types';
+import type { Character, GameSession, Scenario, Skill } from '../types';
 import { renderLetterhead } from './letterhead';
 
 export interface ScoreCtx {
   session: GameSession;
   scenario: Scenario;
+  character: Character;
+  skill: Skill;
   onRestart: () => void;
 }
 
@@ -46,11 +47,10 @@ export function renderScore(ctx: ScoreCtx): HTMLElement {
     para.textContent = p.text || EMPTY_PARAGRAPH;
     letterCard.appendChild(para);
   }
-  const character = characterById(ctx.session.characterId);
   const signature = document.createElement('div');
   signature.className = 'signature-row';
   const signatureText = document.createElement('span');
-  signatureText.textContent = `— ${character?.name ?? 'The Correspondent'}`;
+  signatureText.textContent = `— ${ctx.character.name}`;
   const sealDot = document.createElement('span');
   sealDot.className = 'seal-dot';
   signature.append(signatureText, sealDot);
@@ -108,7 +108,7 @@ export function renderScore(ctx: ScoreCtx): HTMLElement {
   download.className = 'btn btn--primary';
   download.textContent = 'Download letter (.md)';
   download.addEventListener('click', () => {
-    const md = toMarkdown(ctx.session, ctx.scenario, CHARACTERS, SKILLS);
+    const md = toMarkdown(ctx.session, ctx.scenario, ctx.character, ctx.skill);
     const blob = new Blob([md], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

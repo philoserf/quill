@@ -24,13 +24,9 @@ function paragraphRow(p: Paragraph, idx: number, scenario: Scenario, points: num
 export function toMarkdown(
   session: GameSession,
   scenario: Scenario,
-  characters: Character[],
-  skills: Skill[],
+  character: Character,
+  skill: Skill,
 ): string {
-  const character = characters.find((c) => c.id === session.characterId);
-  const skill = skills.find((s) => s.id === session.skillId);
-  if (!character || !skill) throw new Error('Unknown character or skill in session');
-
   const result = score(session);
   const date = session.startedAt.slice(0, 10);
 

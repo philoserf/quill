@@ -1,9 +1,7 @@
-import { characterById, skillById } from '../data';
 import { isSuccess, roll } from '../dice';
 import type { Draft } from '../paragraph';
 import {
   advance,
-  commitParagraph,
   draftToParagraph,
   EMPTY_PARAGRAPH,
   emptyDraft,
@@ -18,17 +16,26 @@ import {
   isSuperior,
   paragraphPoints,
 } from '../scoring';
-import type { GameSession, Scenario } from '../types';
+import type { Character, GameSession, Paragraph, Scenario, Skill } from '../types';
 import { PARAGRAPHS_PER_LETTER } from '../types';
 import { renderLetterhead } from './letterhead';
 
 export interface PlayCtx {
   session: GameSession;
   scenario: Scenario;
-  /** Rebuild the screen without writing to storage. Phase transitions are not
-   *  durable state — only a committed paragraph is. */
+  character: Character;
+  skill: Skill;
+  /** The only durable write this screen performs. Everything else is a repaint. */
+  onCommit: (paragraph: Paragraph) => void;
+}
+
+/** What the render functions below actually need: the context plus the state
+ *  this invocation owns. `state` is one shared object so a handler that fires
+ *  after a repaint — the roll button's shake timer — reads the current draft
+ *  rather than a copy captured when its button was built. */
+interface PlayView extends PlayCtx {
+  state: { draft: Draft; recallOpen: boolean };
   repaint: () => void;
-  onUpdate: (updater: (s: GameSession) => GameSession) => void;
 }
 
 const ROMAN = ['I', 'II', 'III', 'IV', 'V'] as const satisfies {
@@ -37,22 +44,6 @@ const ROMAN = ['I', 'II', 'III', 'IV', 'V'] as const satisfies {
 // Unreachable while ROMAN satisfies the length above; tsc still wants a fallback.
 const LAST_NUMERAL = ROMAN[PARAGRAPHS_PER_LETTER - 1] ?? 'V';
 const STEP_LABELS = ['Word', 'Flourish', 'Language', 'Write', 'Hand'] as const;
-
-let currentDraft: Draft = emptyDraft();
-let scenarioRecallOpen = false;
-let lastSessionId = '';
-
-function ensureDraftFor(session: GameSession) {
-  if (session.id !== lastSessionId) {
-    currentDraft = emptyDraft();
-    scenarioRecallOpen = false;
-    lastSessionId = session.id;
-  }
-}
-
-function rerender(ctx: PlayCtx) {
-  ctx.repaint();
-}
 
 function smallCaps(text: string): HTMLElement {
   const span = document.createElement('span');
@@ -84,62 +75,66 @@ function attachRollButton(btn: HTMLButtonElement, onRoll: () => void): void {
     btn.classList.add('shake');
     btn.disabled = true;
     setTimeout(() => {
-      // A re-render during the shake (skill button, recall toggle) replaces the
-      // whole tree and detaches this button; its dice plan is stale, so abort
-      // and let the freshly rendered button roll with the current plan.
+      // A repaint during the shake — spending the skill is the live case —
+      // replaces the play subtree and detaches this button; its dice plan is
+      // stale, so abort and let the freshly rendered button roll with the
+      // current plan. (The recall toggle mutates in place and does not repaint.)
       if (!btn.isConnected) return;
       onRoll();
     }, 250);
   });
 }
 
-function canSpendSkill(ctx: PlayCtx, attr: 'penmanship' | 'language' | 'heart'): boolean {
-  if (ctx.session.skillSpent) return false;
-  const skill = skillById(ctx.session.skillId);
-  return !!skill && skill.bonusAttribute === attr && currentDraft.skillUsedHere === attr;
+function canSpendSkill(v: PlayView, attr: 'penmanship' | 'language' | 'heart'): boolean {
+  if (v.session.skillSpent) return false;
+  return v.skill.bonusAttribute === attr && v.state.draft.skillUsedHere === attr;
 }
 
-function canSpendSkillButton(ctx: PlayCtx, attr: 'penmanship' | 'language' | 'heart'): boolean {
-  if (ctx.session.skillSpent) return false;
-  const skill = skillById(ctx.session.skillId);
-  return !!skill && skill.bonusAttribute === attr && currentDraft.skillUsedHere !== attr;
+function canSpendSkillButton(v: PlayView, attr: 'penmanship' | 'language' | 'heart'): boolean {
+  if (v.session.skillSpent) return false;
+  return v.skill.bonusAttribute === attr && v.state.draft.skillUsedHere !== attr;
 }
 
 function makeSkillButton(
-  ctx: PlayCtx,
+  v: PlayView,
   attr: 'penmanship' | 'language' | 'heart',
   onChange: () => void,
 ): HTMLElement {
-  const skill = skillById(ctx.session.skillId);
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'btn btn--skill';
-  btn.textContent = `Spend ${skill?.name ?? 'skill'} — +1 die (once per letter)`;
+  btn.textContent = `Spend ${v.skill.name} — +1 die (once per letter)`;
   btn.addEventListener('click', () => {
-    currentDraft.skillUsedHere = attr;
+    v.state.draft.skillUsedHere = attr;
     onChange();
   });
   return btn;
 }
 
 export function renderPlay(ctx: PlayCtx): HTMLElement {
-  ensureDraftFor(ctx.session);
   const root = document.createElement('section');
   root.className = 'screen screen--play';
 
-  root.appendChild(renderHeader(ctx));
+  // Owned by this invocation. A new letter means a new renderPlay call means a
+  // fresh draft, so there is no session-change detection to get wrong.
+  const v: PlayView = {
+    ...ctx,
+    state: { draft: emptyDraft(), recallOpen: false },
+    repaint,
+  };
 
-  const row = document.createElement('div');
-  row.className = 'play-row';
-  row.appendChild(renderInkPotCard(ctx));
-  row.appendChild(renderLetter(ctx));
-  row.appendChild(renderMarginalia(ctx));
-  root.appendChild(row);
+  function repaint() {
+    const row = document.createElement('div');
+    row.className = 'play-row';
+    row.append(renderInkPotCard(v), renderLetter(v), renderMarginalia(v));
+    root.replaceChildren(renderHeader(v), row);
+  }
 
+  repaint();
   return root;
 }
 
-function renderHeader(ctx: PlayCtx): HTMLElement {
+function renderHeader(v: PlayView): HTMLElement {
   const header = document.createElement('div');
   header.className = 'desk-header';
 
@@ -149,18 +144,18 @@ function renderHeader(ctx: PlayCtx): HTMLElement {
   strong.textContent = 'Quill';
   const scenarioTitle = document.createElement('span');
   scenarioTitle.className = 'desk-header__scenario';
-  scenarioTitle.textContent = ctx.scenario.title;
+  scenarioTitle.textContent = v.scenario.title;
   title.append(strong, scenarioTitle);
   header.appendChild(title);
 
-  header.appendChild(renderMedallions(ctx));
+  header.appendChild(renderMedallions(v));
   return header;
 }
 
-function renderMedallions(ctx: PlayCtx): HTMLElement {
+function renderMedallions(v: PlayView): HTMLElement {
   const row = document.createElement('div');
   row.className = 'medallions';
-  const done = ctx.session.paragraphs.length;
+  const done = v.session.paragraphs.length;
   ROMAN.forEach((numeral, i) => {
     const med = document.createElement('span');
     const state = i < done ? 'done' : i === done ? 'current' : 'future';
@@ -171,7 +166,7 @@ function renderMedallions(ctx: PlayCtx): HTMLElement {
   return row;
 }
 
-function renderInkPotCard(ctx: PlayCtx): HTMLElement {
+function renderInkPotCard(v: PlayView): HTMLElement {
   const card = document.createElement('aside');
   card.className = 'ink-pot-card paper paper--side';
   const h = document.createElement('h3');
@@ -181,17 +176,17 @@ function renderInkPotCard(ctx: PlayCtx): HTMLElement {
   const hint = document.createElement('p');
   hint.className = 'inkpot-hint';
   hint.textContent =
-    currentDraft.phase === 'PICK_WORD'
+    v.state.draft.phase === 'PICK_WORD'
       ? 'Choose a word for this paragraph.'
       : 'Each word serves one paragraph.';
   card.appendChild(hint);
 
   const list = document.createElement('ul');
   list.className = 'inkpot-list';
-  ctx.scenario.inkPot.forEach((entry, idx) => {
-    const used = ctx.session.paragraphs.find((p) => p.inkPotIndex === idx);
-    const chosen = !used && currentDraft.inkPotIndex === idx;
-    const pickable = currentDraft.phase === 'PICK_WORD' && !used;
+  v.scenario.inkPot.forEach((entry, idx) => {
+    const used = v.session.paragraphs.find((p) => p.inkPotIndex === idx);
+    const chosen = !used && v.state.draft.inkPotIndex === idx;
+    const pickable = v.state.draft.phase === 'PICK_WORD' && !used;
 
     const li = document.createElement('li');
     const btn = document.createElement('button');
@@ -215,8 +210,8 @@ function renderInkPotCard(ctx: PlayCtx): HTMLElement {
 
     if (pickable) {
       btn.addEventListener('click', () => {
-        currentDraft = advance(currentDraft, { type: 'pickWord', inkPotIndex: idx });
-        rerender(ctx);
+        v.state.draft = advance(v.state.draft, { type: 'pickWord', inkPotIndex: idx });
+        v.repaint();
       });
     }
 
@@ -227,27 +222,27 @@ function renderInkPotCard(ctx: PlayCtx): HTMLElement {
   return card;
 }
 
-function renderLetter(ctx: PlayCtx): HTMLElement {
+function renderLetter(v: PlayView): HTMLElement {
   const letter = document.createElement('section');
   letter.className = 'letter paper';
-  letter.appendChild(renderLetterhead(ctx.scenario.title, ctx.session.startedAt));
+  letter.appendChild(renderLetterhead(v.scenario.title, v.session.startedAt));
 
-  for (const p of ctx.session.paragraphs) {
+  for (const p of v.session.paragraphs) {
     const para = document.createElement('p');
     para.className = 'letter-paragraph';
     para.textContent = p.text || EMPTY_PARAGRAPH;
     letter.appendChild(para);
   }
 
-  letter.appendChild(renderLetterDraftSlot(ctx));
+  letter.appendChild(renderLetterDraftSlot(v));
   return letter;
 }
 
-function renderLetterDraftSlot(ctx: PlayCtx): HTMLElement {
+function renderLetterDraftSlot(v: PlayView): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'letter-draft';
 
-  switch (currentDraft.phase) {
+  switch (v.state.draft.phase) {
     case 'PICK_WORD': {
       const p = document.createElement('p');
       p.className = 'letter-placeholder';
@@ -265,13 +260,13 @@ function renderLetterDraftSlot(ctx: PlayCtx): HTMLElement {
       break;
     }
     case 'WRITE':
-      wrap.appendChild(renderWriteSlot(ctx));
+      wrap.appendChild(renderWriteSlot(v));
       break;
     case 'ROLL_PENMANSHIP':
     case 'PARAGRAPH_DONE': {
       const p = document.createElement('p');
       p.className = 'letter-paragraph';
-      p.textContent = currentDraft.text || EMPTY_PARAGRAPH;
+      p.textContent = v.state.draft.text || EMPTY_PARAGRAPH;
       wrap.appendChild(p);
       break;
     }
@@ -279,20 +274,20 @@ function renderLetterDraftSlot(ctx: PlayCtx): HTMLElement {
   return wrap;
 }
 
-function renderWriteSlot(ctx: PlayCtx): HTMLElement {
-  if (currentDraft.inkPotIndex === null || currentDraft.languageRoll === null) {
+function renderWriteSlot(v: PlayView): HTMLElement {
+  if (v.state.draft.inkPotIndex === null || v.state.draft.languageRoll === null) {
     return internalError('Internal error: missing inkPot index or language roll.');
   }
-  const pair = ctx.scenario.inkPot[currentDraft.inkPotIndex];
+  const pair = v.scenario.inkPot[v.state.draft.inkPotIndex];
   if (!pair) {
     return internalError('Internal error: ink pot entry missing.');
   }
   const wrap = document.createElement('div');
-  const word = isSuperior(currentDraft.languageRoll) ? pair.superior : pair.inferior;
-  const flourishApplied = flourishHeld(currentDraft.heartRoll);
+  const word = isSuperior(v.state.draft.languageRoll) ? pair.superior : pair.inferior;
+  const flourishApplied = flourishHeld(v.state.draft.heartRoll);
   const required =
-    flourishApplied && currentDraft.flourishAdjective
-      ? `${currentDraft.flourishAdjective} ${word}`
+    flourishApplied && v.state.draft.flourishAdjective
+      ? `${v.state.draft.flourishAdjective} ${word}`
       : word;
   const requiredLower = required.toLowerCase();
 
@@ -305,13 +300,13 @@ function renderWriteSlot(ctx: PlayCtx): HTMLElement {
   ta.className = 'paragraph-area';
   ta.rows = 6;
   ta.placeholder = `Write your paragraph using "${required}".`;
-  ta.value = currentDraft.text;
+  ta.value = v.state.draft.text;
   wrap.appendChild(ta);
 
   const indicator = document.createElement('p');
   indicator.className = 'word-indicator';
   const updateIndicator = () => {
-    indicator.textContent = currentDraft.text.toLowerCase().includes(requiredLower)
+    indicator.textContent = v.state.draft.text.toLowerCase().includes(requiredLower)
       ? '✓ the word is set upon the page.'
       : '… the word has not yet been set down.';
   };
@@ -319,7 +314,7 @@ function renderWriteSlot(ctx: PlayCtx): HTMLElement {
   wrap.appendChild(indicator);
 
   ta.addEventListener('input', () => {
-    currentDraft.text = ta.value;
+    v.state.draft.text = ta.value;
     updateIndicator();
   });
 
@@ -328,18 +323,18 @@ function renderWriteSlot(ctx: PlayCtx): HTMLElement {
   next.className = 'btn btn--primary';
   next.textContent = 'Finish paragraph';
   next.addEventListener('click', () => {
-    currentDraft = advance(currentDraft, { type: 'finishParagraph' });
-    rerender(ctx);
+    v.state.draft = advance(v.state.draft, { type: 'finishParagraph' });
+    v.repaint();
   });
   wrap.appendChild(next);
   return wrap;
 }
 
-function renderMarginalia(ctx: PlayCtx): HTMLElement {
+function renderMarginalia(v: PlayView): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'marginalia';
-  wrap.appendChild(renderMarginaliaStepCard(ctx));
-  wrap.appendChild(renderMarginaliaReferenceCard(ctx));
+  wrap.appendChild(renderMarginaliaStepCard(v));
+  wrap.appendChild(renderMarginaliaReferenceCard(v));
   return wrap;
 }
 
@@ -358,18 +353,18 @@ function renderStepper(phase: PhaseName): HTMLElement {
   return row;
 }
 
-function renderMarginaliaStepCard(ctx: PlayCtx): HTMLElement {
+function renderMarginaliaStepCard(v: PlayView): HTMLElement {
   const card = document.createElement('section');
   card.className = 'marginalia-card marginalia-card--step paper paper--side';
 
-  const roman = ROMAN[ctx.session.paragraphs.length] ?? LAST_NUMERAL;
+  const roman = ROMAN[v.session.paragraphs.length] ?? LAST_NUMERAL;
   const heading = document.createElement('h4');
   heading.textContent = `Paragraph ${roman} of ${LAST_NUMERAL}`;
   card.appendChild(heading);
 
-  card.appendChild(renderStepper(currentDraft.phase));
+  card.appendChild(renderStepper(v.state.draft.phase));
 
-  switch (currentDraft.phase) {
+  switch (v.state.draft.phase) {
     case 'PICK_WORD': {
       const p = document.createElement('p');
       p.className = 'step-instruction';
@@ -378,28 +373,28 @@ function renderMarginaliaStepCard(ctx: PlayCtx): HTMLElement {
       break;
     }
     case 'DECIDE_FLOURISH':
-      card.appendChild(renderStepFlourish(ctx));
+      card.appendChild(renderStepFlourish(v));
       break;
     case 'ROLL_HEART':
-      card.appendChild(renderRollHeartStep(ctx));
+      card.appendChild(renderRollHeartStep(v));
       break;
     case 'ROLL_LANGUAGE':
-      card.appendChild(renderRollLanguageStep(ctx));
+      card.appendChild(renderRollLanguageStep(v));
       break;
     case 'WRITE':
       break;
     case 'ROLL_PENMANSHIP':
-      card.appendChild(renderRollPenmanshipStep(ctx));
+      card.appendChild(renderRollPenmanshipStep(v));
       break;
     case 'PARAGRAPH_DONE':
-      card.appendChild(renderStepDone(ctx));
+      card.appendChild(renderStepDone(v));
       break;
   }
 
   return card;
 }
 
-function renderStepFlourish(ctx: PlayCtx): HTMLElement {
+function renderStepFlourish(v: PlayView): HTMLElement {
   const wrap = document.createElement('div');
   const info = document.createElement('p');
   info.className = 'step-instruction';
@@ -410,10 +405,10 @@ function renderStepFlourish(ctx: PlayCtx): HTMLElement {
   const input = document.createElement('input');
   input.type = 'text';
   input.placeholder = 'flourish word (e.g. "solemn")';
-  input.value = currentDraft.flourishAdjective;
+  input.value = v.state.draft.flourishAdjective;
   input.className = 'flourish-input';
   input.addEventListener('input', () => {
-    currentDraft.flourishAdjective = input.value;
+    v.state.draft.flourishAdjective = input.value;
   });
   wrap.appendChild(input);
 
@@ -422,12 +417,12 @@ function renderStepFlourish(ctx: PlayCtx): HTMLElement {
   attempt.className = 'btn btn--primary';
   attempt.textContent = 'Attempt it';
   attempt.addEventListener('click', () => {
-    if (!currentDraft.flourishAdjective.trim()) {
+    if (!v.state.draft.flourishAdjective.trim()) {
       input.focus();
       return;
     }
-    currentDraft = advance(currentDraft, { type: 'attemptFlourish' });
-    rerender(ctx);
+    v.state.draft = advance(v.state.draft, { type: 'attemptFlourish' });
+    v.repaint();
   });
 
   const skip = document.createElement('button');
@@ -435,8 +430,8 @@ function renderStepFlourish(ctx: PlayCtx): HTMLElement {
   skip.className = 'btn';
   skip.textContent = 'Write plainly';
   skip.addEventListener('click', () => {
-    currentDraft = advance(currentDraft, { type: 'writePlainly' });
-    rerender(ctx);
+    v.state.draft = advance(v.state.draft, { type: 'writePlainly' });
+    v.repaint();
   });
 
   const actions = document.createElement('div');
@@ -458,22 +453,18 @@ function makeRollVerdict(dice: number[], ok: boolean, text: string): HTMLElement
 }
 
 function renderRollStep(
-  ctx: PlayCtx,
+  v: PlayView,
   attr: 'penmanship' | 'language' | 'heart',
   purpose: string,
   onRolled: (dice: number[]) => void,
   verdict?: HTMLElement,
 ): HTMLElement {
-  const character = characterById(ctx.session.characterId);
-  if (!character) {
-    return internalError('Character not found.');
-  }
   const wrap = document.createElement('div');
-  const skillBonusActive = canSpendSkill(ctx, attr);
+  const skillBonusActive = canSpendSkill(v, attr);
   const plan = planRoll({
     attribute: attr,
-    character,
-    scenario: ctx.scenario,
+    character: v.character,
+    scenario: v.scenario,
     skillBonusActive,
   });
 
@@ -486,8 +477,8 @@ function renderRollStep(
   info.textContent = `Roll ${attrName} (${plan.diceCount} dice${notes}) ${purpose}`;
   wrap.appendChild(info);
 
-  if (canSpendSkillButton(ctx, attr)) {
-    wrap.appendChild(makeSkillButton(ctx, attr, () => rerender(ctx)));
+  if (canSpendSkillButton(v, attr)) {
+    wrap.appendChild(makeSkillButton(v, attr, () => v.repaint()));
   }
 
   const rollBtn = document.createElement('button');
@@ -502,74 +493,74 @@ function renderRollStep(
       const re = roll(1)[0] ?? 1;
       dice = [...dice.slice(0, i), re, ...dice.slice(i + 1)];
     }
-    if (skillBonusActive) currentDraft.skillUsedHere = attr;
+    if (skillBonusActive) v.state.draft.skillUsedHere = attr;
     onRolled(dice);
-    rerender(ctx);
+    v.repaint();
   });
   wrap.appendChild(rollBtn);
   return wrap;
 }
 
-function renderRollHeartStep(ctx: PlayCtx): HTMLElement {
+function renderRollHeartStep(v: PlayView): HTMLElement {
   return renderRollStep(
-    ctx,
+    v,
     'heart',
-    `to see if the flourish "${currentDraft.flourishAdjective}" holds.`,
+    `to see if the flourish "${v.state.draft.flourishAdjective}" holds.`,
     (dice) => {
-      currentDraft = advance(currentDraft, { type: 'rolled', attribute: 'heart', dice });
+      v.state.draft = advance(v.state.draft, { type: 'rolled', attribute: 'heart', dice });
     },
   );
 }
 
-function renderRollLanguageStep(ctx: PlayCtx): HTMLElement {
+function renderRollLanguageStep(v: PlayView): HTMLElement {
   let verdict: HTMLElement | undefined;
-  if (currentDraft.heartRoll) {
-    const held = flourishHeld(currentDraft.heartRoll);
+  if (v.state.draft.heartRoll) {
+    const held = flourishHeld(v.state.draft.heartRoll);
     verdict = makeRollVerdict(
-      currentDraft.heartRoll,
+      v.state.draft.heartRoll,
       held,
       held
-        ? `The flourish "${currentDraft.flourishAdjective}" holds.`
+        ? `The flourish "${v.state.draft.flourishAdjective}" holds.`
         : 'The flourish is lost — the word must stand alone.',
     );
   }
   return renderRollStep(
-    ctx,
+    v,
     'language',
     'to determine whether you draw the superior word.',
     (dice) => {
-      currentDraft = advance(currentDraft, { type: 'rolled', attribute: 'language', dice });
+      v.state.draft = advance(v.state.draft, { type: 'rolled', attribute: 'language', dice });
     },
     verdict,
   );
 }
 
-function renderRollPenmanshipStep(ctx: PlayCtx): HTMLElement {
+function renderRollPenmanshipStep(v: PlayView): HTMLElement {
   const pair =
-    currentDraft.inkPotIndex === null ? undefined : ctx.scenario.inkPot[currentDraft.inkPotIndex];
-  if (!pair || currentDraft.languageRoll === null) {
+    v.state.draft.inkPotIndex === null ? undefined : v.scenario.inkPot[v.state.draft.inkPotIndex];
+  if (!pair || v.state.draft.languageRoll === null) {
     return internalError('Internal error: missing ink pot entry or language roll.');
   }
-  const superior = isSuperior(currentDraft.languageRoll);
+  const superior = isSuperior(v.state.draft.languageRoll);
   const verdict = makeRollVerdict(
-    currentDraft.languageRoll,
+    v.state.draft.languageRoll,
     superior,
     superior ? `Superior — write "${pair.superior}".` : `Inferior — "${pair.inferior}" must serve.`,
   );
   return renderRollStep(
-    ctx,
+    v,
     'penmanship',
     'for a fine hand.',
     (dice) => {
-      currentDraft = advance(currentDraft, { type: 'rolled', attribute: 'penmanship', dice });
+      v.state.draft = advance(v.state.draft, { type: 'rolled', attribute: 'penmanship', dice });
     },
     verdict,
   );
 }
 
-function renderStepDone(ctx: PlayCtx): HTMLElement {
-  const para = draftToParagraph(currentDraft);
-  const pair = para === null ? undefined : ctx.scenario.inkPot[para.inkPotIndex];
+function renderStepDone(v: PlayView): HTMLElement {
+  const para = draftToParagraph(v.state.draft);
+  const pair = para === null ? undefined : v.scenario.inkPot[para.inkPotIndex];
   if (!para || !pair) {
     return internalError('Internal error: missing roll data.');
   }
@@ -599,7 +590,7 @@ function renderStepDone(ctx: PlayCtx): HTMLElement {
 
   if (flourishApplied) {
     const flourishLine = document.createElement('p');
-    flourishLine.textContent = `With the flourish "${currentDraft.flourishAdjective}."`;
+    flourishLine.textContent = `With the flourish "${v.state.draft.flourishAdjective}."`;
     wrap.appendChild(flourishLine);
   }
 
@@ -608,47 +599,42 @@ function renderStepDone(ctx: PlayCtx): HTMLElement {
   ptsLine.textContent = `${formatSignedPoints(pts)} points this paragraph`;
   wrap.appendChild(ptsLine);
 
-  const isLast = ctx.session.paragraphs.length === PARAGRAPHS_PER_LETTER - 1;
+  const isLast = v.session.paragraphs.length === PARAGRAPHS_PER_LETTER - 1;
   const next = document.createElement('button');
   next.type = 'button';
   next.className = 'btn btn--primary';
   next.textContent = isLast ? 'Seal & finish the letter' : 'Next paragraph';
   next.addEventListener('click', () => {
-    // Snapshot the draft before the reset below; nothing may read currentDraft after it.
-    const newPara = draftToParagraph(currentDraft);
+    const newPara = draftToParagraph(v.state.draft);
     if (!newPara) return;
-    // Reset the draft BEFORE onUpdate. The store notifies subscribers synchronously,
-    // which triggers a re-render that reads currentDraft.phase. If we reset after,
-    // the re-render shows PARAGRAPH_DONE again and the player has to reload.
-    currentDraft = emptyDraft();
-    ctx.onUpdate((s) => commitParagraph(s, newPara));
+    // Committing replaces the whole screen with a fresh renderPlay, discarding
+    // this closure and its draft — there is no reset to sequence.
+    v.onCommit(newPara);
   });
   wrap.appendChild(next);
   return wrap;
 }
 
-function renderMarginaliaReferenceCard(ctx: PlayCtx): HTMLElement {
+function renderMarginaliaReferenceCard(v: PlayView): HTMLElement {
   const card = document.createElement('section');
   card.className = 'marginalia-card marginalia-card--reference paper paper--side';
   const h = document.createElement('h5');
   h.textContent = 'The Correspondent';
   card.appendChild(h);
 
-  const character = characterById(ctx.session.characterId);
-  const skill = skillById(ctx.session.skillId);
   const charLine = document.createElement('p');
   charLine.className = 'char-line';
-  charLine.append(`${character?.name ?? ''} — ${skill?.name ?? ''} `);
+  charLine.append(`${v.character.name} — ${v.skill.name} `);
   const skillNote = document.createElement('span');
   skillNote.className = 'small-caps';
   // skillSpent only flips when the paragraph is committed; the draft's
   // skillUsedHere covers the window between spending and committing.
-  const skillSpent = ctx.session.skillSpent || currentDraft.skillUsedHere !== null;
+  const skillSpent = v.session.skillSpent || v.state.draft.skillUsedHere !== null;
   skillNote.textContent = skillSpent ? 'spent' : 'unspent';
   charLine.appendChild(skillNote);
   card.appendChild(charLine);
 
-  const total = ctx.session.paragraphs.reduce((acc, p) => acc + paragraphPoints(p), 0);
+  const total = v.session.paragraphs.reduce((acc, p) => acc + paragraphPoints(p), 0);
   const scoreLine = document.createElement('p');
   scoreLine.className = 'running-score';
   const strong = document.createElement('strong');
@@ -656,26 +642,26 @@ function renderMarginaliaReferenceCard(ctx: PlayCtx): HTMLElement {
   scoreLine.append(
     'Running Score: ',
     strong,
-    ` (after ${ctx.session.paragraphs.length} of ${PARAGRAPHS_PER_LETTER})`,
+    ` (after ${v.session.paragraphs.length} of ${PARAGRAPHS_PER_LETTER})`,
   );
   card.appendChild(scoreLine);
 
   const toggle = document.createElement('button');
   toggle.type = 'button';
   toggle.className = 'recall-toggle';
-  toggle.textContent = scenarioRecallOpen ? 'Hide the scenario…' : 'Recall the scenario…';
+  toggle.textContent = v.state.recallOpen ? 'Hide the scenario…' : 'Recall the scenario…';
   card.appendChild(toggle);
 
   // Toggling is purely local UI — flip the panel in place rather than
-  // rerender(ctx), which would rewrite localStorage and rebuild the whole
-  // screen (destroying e.g. a mid-shake roll button).
-  const panel = renderRecallPanel(ctx.scenario);
-  panel.hidden = !scenarioRecallOpen;
+  // v.repaint(), which would rebuild the play subtree and destroy e.g. a
+  // mid-shake roll button.
+  const panel = renderRecallPanel(v.scenario);
+  panel.hidden = !v.state.recallOpen;
   card.appendChild(panel);
   toggle.addEventListener('click', () => {
-    scenarioRecallOpen = !scenarioRecallOpen;
-    panel.hidden = !scenarioRecallOpen;
-    toggle.textContent = scenarioRecallOpen ? 'Hide the scenario…' : 'Recall the scenario…';
+    v.state.recallOpen = !v.state.recallOpen;
+    panel.hidden = !v.state.recallOpen;
+    toggle.textContent = v.state.recallOpen ? 'Hide the scenario…' : 'Recall the scenario…';
   });
 
   return card;

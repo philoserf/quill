@@ -1,8 +1,13 @@
 import { describe, expect, test } from 'bun:test';
-import { CHARACTERS, SKILLS } from '../src/data';
+import { characterById, skillById } from '../src/data';
 import { toMarkdown } from '../src/export';
 import type { GameSession } from '../src/types';
 import { must, scenarioFixture } from './helpers';
+
+// toMarkdown now takes the resolved pair; main.ts is the single resolution
+// point, so the function no longer re-finds them or throws when it cannot.
+const character = must(characterById('monk'), 'monk fixture');
+const skill = must(skillById('illumination'), 'illumination fixture');
 
 const scenario = scenarioFixture({
   id: 'archduke',
@@ -53,7 +58,7 @@ const session: GameSession = {
 
 describe('toMarkdown', () => {
   test('frontmatter contains character, skill, scenario, score, consequence', () => {
-    const md = toMarkdown(session, scenario, CHARACTERS, SKILLS);
+    const md = toMarkdown(session, scenario, character, skill);
     expect(md).toContain('character: The Monk');
     expect(md).toContain('skill: Illumination');
     expect(md).toContain('scenario: The Archduke');
@@ -62,7 +67,7 @@ describe('toMarkdown', () => {
   });
 
   test('letter body contains paragraph text in order', () => {
-    const md = toMarkdown(session, scenario, CHARACTERS, SKILLS);
+    const md = toMarkdown(session, scenario, character, skill);
     const i1 = md.indexOf('solemn Passing');
     const i2 = md.indexOf('our small Town');
     expect(i1).toBeGreaterThan(0);
@@ -70,7 +75,7 @@ describe('toMarkdown', () => {
   });
 
   test('game-record table renders rolls and shows em-dash for missing rolls', () => {
-    const md = toMarkdown(session, scenario, CHARACTERS, SKILLS);
+    const md = toMarkdown(session, scenario, character, skill);
     const lines = md.split('\n');
     const row2 = must(
       lines.find((l) => l.startsWith('| 2 |')),
@@ -91,7 +96,7 @@ describe('toMarkdown', () => {
         must(session.paragraphs[1], 'expected paragraph 2 fixture'),
       ],
     };
-    const md = toMarkdown(failed, scenario, CHARACTERS, SKILLS);
+    const md = toMarkdown(failed, scenario, character, skill);
     const row1 = must(
       md.split('\n').find((l) => l.startsWith('| 1 |')),
       'expected row 1 in markdown table',
@@ -101,7 +106,7 @@ describe('toMarkdown', () => {
   });
 
   test('a flourish that held is reported in the table', () => {
-    const md = toMarkdown(session, scenario, CHARACTERS, SKILLS);
+    const md = toMarkdown(session, scenario, character, skill);
     const row1 = must(
       md.split('\n').find((l) => l.startsWith('| 1 |')),
       'expected row 1 in markdown table',
@@ -110,7 +115,7 @@ describe('toMarkdown', () => {
   });
 
   test('total score and consequence text appear at the end', () => {
-    const md = toMarkdown(session, scenario, CHARACTERS, SKILLS);
+    const md = toMarkdown(session, scenario, character, skill);
     expect(md).toContain('**Total**: 5 / tepid');
     expect(md).toContain('> Mild offence is taken.');
   });
@@ -126,7 +131,7 @@ describe('toMarkdown', () => {
         { ...must(session.paragraphs[1], 'p2'), text: '' },
       ],
     };
-    const md = toMarkdown(empty, scenario, CHARACTERS, SKILLS);
+    const md = toMarkdown(empty, scenario, character, skill);
     expect(md).toContain('(empty paragraph)');
     expect(md).not.toMatch(/\n\n\n\n/);
   });

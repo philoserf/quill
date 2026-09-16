@@ -1,3 +1,4 @@
+import { EMPTY_PARAGRAPH } from './paragraph';
 import { flourishHeld, isSuperior, score } from './scoring';
 import type { Character, GameSession, Paragraph, Scenario, Skill } from './types';
 
@@ -45,7 +46,7 @@ export function toMarkdown(
     '',
   ].join('\n');
 
-  const body = session.paragraphs.map((p) => p.text.trim()).join('\n\n');
+  const body = session.paragraphs.map((p) => p.text.trim() || EMPTY_PARAGRAPH).join('\n\n');
 
   const tableHeader =
     '| # | Word | Flourish | Heart | Language | Penmanship | Points |\n| --- | --- | --- | --- | --- | --- | --- |';

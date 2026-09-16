@@ -1,5 +1,6 @@
 import { CHARACTERS, characterById, SKILLS } from '../data';
 import { toMarkdown } from '../export';
+import { EMPTY_PARAGRAPH } from '../paragraph';
 import { fineHand, flourishHeld, formatSignedPoints, isSuperior, score } from '../scoring';
 import type { GameSession, Scenario } from '../types';
 import { renderLetterhead } from './letterhead';
@@ -42,7 +43,7 @@ export function renderScore(ctx: ScoreCtx): HTMLElement {
   for (const p of ctx.session.paragraphs) {
     const para = document.createElement('p');
     para.className = 'letter-paragraph';
-    para.textContent = p.text;
+    para.textContent = p.text || EMPTY_PARAGRAPH;
     letterCard.appendChild(para);
   }
   const character = characterById(ctx.session.characterId);

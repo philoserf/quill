@@ -6,8 +6,7 @@
       "Bash(claude --version)",
       "Bash(claude mcp list)",
       "Bash(prettier --version)",
-      "Bash(gh label list *)",
-      "Bash(task check)"
+      "Bash(gh label list *)"
     ]
   }
 }

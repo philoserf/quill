@@ -253,6 +253,16 @@ button:focus-visible {
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
 }
 
+/* Arrow-key navigation re-renders the step and restores focus programmatically.
+   Whether a browser counts that as :focus-visible is a heuristic, so the
+   radiogroup does not lean on the shared button rule: it needs a visible focus
+   indicator either way. A ring on a card the user has just selected anyway
+   costs nothing. */
+.card[role="radio"]:focus {
+  outline: 2px solid var(--wax);
+  outline-offset: 2px;
+}
+
 .card--selected {
   border: 2px solid var(--wax);
   background: var(--paper-pressed);

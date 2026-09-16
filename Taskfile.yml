@@ -1,12 +1,10 @@
 version: "3"
 
-tasks:
-  default:
-    desc: Run the CI check suite (biome + tsc + tests)
-    aliases: [check]
-    cmds:
-      - task: check:ci
+# Only tasks that carry content a `package.json` script does not.
+# Everything else — dev, build, test, check, fix — is a `bun run <script>`;
+# see `package.json`, which the README documents as the way to run them.
 
+tasks:
   setup:
     desc: Install the Homebrew toolchain, then project dependencies
     sources: [Brewfile]
@@ -25,33 +23,3 @@ tasks:
     desc: Verify the Brewfile toolchain is installed
     cmds:
       - brew bundle check --file=Brewfile --verbose
-
-  install:
-    desc: Install project dependencies (also installs the pre-push hook)
-    cmds:
-      - bun install
-
-  dev:
-    desc: Start the dev server at http://localhost:3000
-    cmds:
-      - bun run dev
-
-  build:
-    desc: Bundle the app to dist/
-    cmds:
-      - bun run build
-
-  test:
-    desc: Run the test suite
-    cmds:
-      - bun test {{.CLI_ARGS}}
-
-  check:ci:
-    desc: Non-mutating gate — biome check + tsc --noEmit + tests (matches CI)
-    cmds:
-      - bun run check:ci
-
-  fix:
-    desc: Format and lint with biome, applying fixes
-    cmds:
-      - bun run check

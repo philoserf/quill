@@ -37,6 +37,7 @@ export function renderSetup(ctx: SetupCtx): HTMLElement {
 
     root.appendChild(
       renderChoiceStep({
+        kind: 'character',
         title: 'I. The Character',
         prompt: 'Who holds the quill?',
         items: CHARACTERS,
@@ -54,6 +55,7 @@ export function renderSetup(ctx: SetupCtx): HTMLElement {
     if (state.characterId) {
       root.appendChild(
         renderChoiceStep({
+          kind: 'skill',
           title: 'II. The Skill',
           prompt: 'One gift, spent once per letter.',
           items: SKILLS,
@@ -70,6 +72,7 @@ export function renderSetup(ctx: SetupCtx): HTMLElement {
 
     if (state.skillId) {
       const step = renderChoiceStep({
+        kind: 'scenario',
         title: 'III. The Scenario',
         prompt: 'To whom do you write, and why?',
         items: ctx.scenarios,
@@ -123,6 +126,7 @@ export function renderSetup(ctx: SetupCtx): HTMLElement {
  *  paragraph plus pip labels announced as all of it at once. The `aria-label`
  *  below is the name; everything else is presentation. */
 function renderChoiceStep<T extends { id: string }>(opts: {
+  kind: string;
   title: string;
   prompt: string;
   items: readonly T[];
@@ -149,17 +153,31 @@ function renderChoiceStep<T extends { id: string }>(opts: {
     const card = document.createElement('button');
     card.type = 'button';
     card.className = `card${selected ? ' card--selected' : ''}`;
-    card.setAttribute('aria-label', opts.name(item));
     card.setAttribute('aria-pressed', String(selected));
 
+    const base = `${opts.kind}-${item.id}`;
     const title = document.createElement('span');
     title.className = 'card__title';
+    title.id = `${base}-title`;
     title.textContent = opts.name(item);
     const blurb = document.createElement('span');
     blurb.className = 'card__blurb';
+    blurb.id = `${base}-blurb`;
     blurb.textContent = opts.blurb(item);
     card.append(title, blurb);
-    if (opts.extra) card.appendChild(opts.extra(item));
+
+    // Name from the title alone; the rest stays reachable as the description.
+    // An aria-label here would *replace* the subtree name, which would hide the
+    // attribute pips — the whole basis for choosing a character.
+    const describedBy = [blurb.id];
+    if (opts.extra) {
+      const detail = opts.extra(item);
+      detail.id = `${base}-detail`;
+      describedBy.push(detail.id);
+      card.appendChild(detail);
+    }
+    card.setAttribute('aria-labelledby', title.id);
+    card.setAttribute('aria-describedby', describedBy.join(' '));
 
     card.addEventListener('click', () => opts.onSelect(item));
     grid.appendChild(card);

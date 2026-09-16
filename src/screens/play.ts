@@ -33,7 +33,6 @@ type PhaseName =
 interface Draft {
   phase: PhaseName;
   inkPotIndex: number | null;
-  attemptedFlourish: boolean;
   flourishAdjective: string;
   heartRoll: number[] | null;
   languageRoll: number[] | null;
@@ -46,7 +45,6 @@ function emptyDraft(): Draft {
   return {
     phase: 'PICK_WORD',
     inkPotIndex: null,
-    attemptedFlourish: false,
     flourishAdjective: '',
     heartRoll: null,
     languageRoll: null,
@@ -64,8 +62,7 @@ function draftToParagraph(d: Draft): Paragraph | null {
   if (d.inkPotIndex === null || d.languageRoll === null || d.penmanshipRoll === null) return null;
   return {
     inkPotIndex: d.inkPotIndex,
-    attemptedFlourish: d.attemptedFlourish,
-    flourishAdjective: d.attemptedFlourish ? d.flourishAdjective : null,
+    flourishAdjective: d.flourishAdjective.trim() ? d.flourishAdjective : null,
     heartRoll: d.heartRoll,
     languageRoll: d.languageRoll,
     penmanshipRoll: d.penmanshipRoll,
@@ -333,7 +330,7 @@ function renderWriteSlot(ctx: PlayCtx): HTMLElement {
   }
   const wrap = document.createElement('div');
   const word = isSuperior(currentDraft.languageRoll) ? pair.superior : pair.inferior;
-  const flourishApplied = flourishHeld(currentDraft.attemptedFlourish, currentDraft.heartRoll);
+  const flourishApplied = flourishHeld(currentDraft.heartRoll);
   const required =
     flourishApplied && currentDraft.flourishAdjective
       ? `${currentDraft.flourishAdjective} ${word}`
@@ -488,7 +485,6 @@ function renderStepFlourish(ctx: PlayCtx): HTMLElement {
       input.focus();
       return;
     }
-    currentDraft.attemptedFlourish = true;
     currentDraft.phase = 'ROLL_HEART';
     rerender(ctx);
   });
@@ -498,7 +494,6 @@ function renderStepFlourish(ctx: PlayCtx): HTMLElement {
   skip.className = 'btn';
   skip.textContent = 'Write plainly';
   skip.addEventListener('click', () => {
-    currentDraft.attemptedFlourish = false;
     currentDraft.flourishAdjective = '';
     currentDraft.phase = 'ROLL_LANGUAGE';
     rerender(ctx);
@@ -589,8 +584,8 @@ function renderRollHeartStep(ctx: PlayCtx): HTMLElement {
 
 function renderRollLanguageStep(ctx: PlayCtx): HTMLElement {
   let verdict: HTMLElement | undefined;
-  if (currentDraft.attemptedFlourish && currentDraft.heartRoll) {
-    const held = flourishHeld(currentDraft.attemptedFlourish, currentDraft.heartRoll);
+  if (currentDraft.heartRoll) {
+    const held = flourishHeld(currentDraft.heartRoll);
     verdict = makeRollVerdict(
       currentDraft.heartRoll,
       held,
@@ -644,7 +639,7 @@ function renderStepDone(ctx: PlayCtx): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'done-summary';
   const superior = isSuperior(para.languageRoll);
-  const flourishApplied = flourishHeld(para.attemptedFlourish, para.heartRoll);
+  const flourishApplied = flourishHeld(para.heartRoll);
   const penOk = fineHand(para.penmanshipRoll);
   const pts = paragraphPoints(para);
 

@@ -5,7 +5,6 @@ import type { GameSession, Paragraph, TierName } from '../src/types';
 function para(overrides: Partial<Paragraph>): Paragraph {
   return {
     inkPotIndex: 0,
-    attemptedFlourish: false,
     flourishAdjective: null,
     heartRoll: null,
     languageRoll: [3],
@@ -44,7 +43,6 @@ describe('score', () => {
     const r = score(
       session([
         para({
-          attemptedFlourish: true,
           flourishAdjective: 'solemn',
           heartRoll: [5],
           languageRoll: [6],
@@ -59,7 +57,6 @@ describe('score', () => {
     const r = score(
       session([
         para({
-          attemptedFlourish: true,
           flourishAdjective: 'gallant',
           heartRoll: [6],
           languageRoll: [2],
@@ -74,7 +71,6 @@ describe('score', () => {
     const r = score(
       session([
         para({
-          attemptedFlourish: true,
           flourishAdjective: 'solemn',
           heartRoll: [3, 2],
           languageRoll: [5],
@@ -109,7 +105,6 @@ describe('score', () => {
     const r = score(
       session([
         para({
-          attemptedFlourish: true,
           flourishAdjective: 'awful',
           heartRoll: [6],
           languageRoll: [2],

@@ -78,12 +78,11 @@ export function renderScore(ctx: ScoreCtx): HTMLElement {
     const pair = ctx.scenario.inkPot[p.inkPotIndex];
     const sup = isSuperior(p.languageRoll);
     const flourish = p.flourishAdjective;
-    const flourishApplied = flourish !== null && flourishHeld(p.attemptedFlourish, p.heartRoll);
     let word = pair
       ? `"${sup ? pair.superior : pair.inferior}" (${sup ? 'superior' : 'inferior'})`
       : '—';
-    if (p.attemptedFlourish) {
-      word += flourishApplied ? ` + "${flourish}"` : ' — flourish lost';
+    if (flourish !== null) {
+      word += flourishHeld(p.heartRoll) ? ` + "${flourish}"` : ' — flourish lost';
     }
     const penOk = fineHand(p.penmanshipRoll);
     const hand = penOk ? 'Fine hand' : 'Plain hand';

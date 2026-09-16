@@ -48,7 +48,6 @@ export interface Scenario {
 
 export interface Paragraph {
   inkPotIndex: number;
-  attemptedFlourish: boolean;
   flourishAdjective: string | null;
   heartRoll: number[] | null;
   languageRoll: number[];

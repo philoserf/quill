@@ -16,10 +16,7 @@ function paragraphRow(p: Paragraph, idx: number, scenario: Scenario, points: num
     : EMDASH;
   // Only a flourish that held is reported — an attempt whose Heart roll failed
   // earns nothing and is not shown, matching the play screen's done summary.
-  const flourish =
-    flourishHeld(p.attemptedFlourish, p.heartRoll) && p.flourishAdjective
-      ? p.flourishAdjective
-      : EMDASH;
+  const flourish = flourishHeld(p.heartRoll) && p.flourishAdjective ? p.flourishAdjective : EMDASH;
   return `| ${idx + 1} | ${word} | ${flourish} | ${rollCell(p.heartRoll)} | ${rollCell(p.languageRoll)} | ${rollCell(p.penmanshipRoll)} | ${points} |`;
 }
 

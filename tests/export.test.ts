@@ -31,7 +31,6 @@ const session: GameSession = {
     {
       // P1: flourished superior (2) + penmanship pass (1) = 3
       inkPotIndex: 0,
-      attemptedFlourish: true,
       flourishAdjective: 'solemn',
       heartRoll: [5, 3],
       languageRoll: [6, 2],
@@ -42,7 +41,6 @@ const session: GameSession = {
     {
       // P2: plain superior (1) + penmanship pass (1) = 2 — total grand 5 → tepid
       inkPotIndex: 1,
-      attemptedFlourish: false,
       flourishAdjective: null,
       heartRoll: null,
       languageRoll: [5],

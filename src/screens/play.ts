@@ -8,7 +8,7 @@ import {
   type PhaseName,
   STEP_INDEX,
 } from '../paragraph';
-import { planRoll } from '../rules';
+import { applyReroll, planRoll } from '../rules';
 import {
   fineHand,
   flourishHeld,
@@ -16,7 +16,7 @@ import {
   isSuperior,
   paragraphPoints,
 } from '../scoring';
-import type { Character, GameSession, Paragraph, Scenario, Skill } from '../types';
+import type { Attribute, Character, GameSession, Paragraph, Scenario, Skill } from '../types';
 import { PARAGRAPHS_PER_LETTER } from '../types';
 import { renderLetterhead } from './letterhead';
 
@@ -85,30 +85,11 @@ function attachRollButton(btn: HTMLButtonElement, onRoll: () => void): void {
   });
 }
 
-function canSpendSkill(v: PlayView, attr: 'penmanship' | 'language' | 'heart'): boolean {
-  if (v.session.skillSpent) return false;
-  return v.skill.bonusAttribute === attr && v.state.draft.skillUsedHere === attr;
-}
-
-function canSpendSkillButton(v: PlayView, attr: 'penmanship' | 'language' | 'heart'): boolean {
-  if (v.session.skillSpent) return false;
-  return v.skill.bonusAttribute === attr && v.state.draft.skillUsedHere !== attr;
-}
-
-function makeSkillButton(
-  v: PlayView,
-  attr: 'penmanship' | 'language' | 'heart',
-  onChange: () => void,
-): HTMLElement {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'btn btn--skill';
-  btn.textContent = `Spend ${v.skill.name} — +1 die (once per letter)`;
-  btn.addEventListener('click', () => {
-    v.state.draft.skillUsedHere = attr;
-    onChange();
-  });
-  return btn;
+/** The one underlying fact: this skill applies to this attribute and has not
+ *  been spent. Whether the player has already pressed the button this paragraph
+ *  is a separate question, answered by `skillUsedHere` at the call site. */
+function skillAvailableFor(v: PlayView, attr: Attribute): boolean {
+  return !v.session.skillSpent && v.skill.bonusAttribute === attr;
 }
 
 export function renderPlay(ctx: PlayCtx): HTMLElement {
@@ -454,13 +435,14 @@ function makeRollVerdict(dice: number[], ok: boolean, text: string): HTMLElement
 
 function renderRollStep(
   v: PlayView,
-  attr: 'penmanship' | 'language' | 'heart',
+  attr: Attribute,
   purpose: string,
   onRolled: (dice: number[]) => void,
   verdict?: HTMLElement,
 ): HTMLElement {
   const wrap = document.createElement('div');
-  const skillBonusActive = canSpendSkill(v, attr);
+  const skillAvailable = skillAvailableFor(v, attr);
+  const skillBonusActive = skillAvailable && v.state.draft.skillUsedHere === attr;
   const plan = planRoll({
     attribute: attr,
     character: v.character,
@@ -477,8 +459,16 @@ function renderRollStep(
   info.textContent = `Roll ${attrName} (${plan.diceCount} dice${notes}) ${purpose}`;
   wrap.appendChild(info);
 
-  if (canSpendSkillButton(v, attr)) {
-    wrap.appendChild(makeSkillButton(v, attr, () => v.repaint()));
+  if (skillAvailable && !skillBonusActive) {
+    const spend = document.createElement('button');
+    spend.type = 'button';
+    spend.className = 'btn btn--skill';
+    spend.textContent = `Spend ${v.skill.name} — +1 die (once per letter)`;
+    spend.addEventListener('click', () => {
+      v.state.draft.skillUsedHere = attr;
+      v.repaint();
+    });
+    wrap.appendChild(spend);
   }
 
   const rollBtn = document.createElement('button');
@@ -486,15 +476,7 @@ function renderRollStep(
   rollBtn.className = 'btn btn--primary';
   rollBtn.textContent = 'Roll the dice';
   attachRollButton(rollBtn, () => {
-    let dice = roll(plan.diceCount);
-    if (plan.rerollPolicy === 'highest' && dice.length > 0) {
-      const max = Math.max(...dice);
-      const i = dice.indexOf(max);
-      const re = roll(1)[0] ?? 1;
-      dice = [...dice.slice(0, i), re, ...dice.slice(i + 1)];
-    }
-    if (skillBonusActive) v.state.draft.skillUsedHere = attr;
-    onRolled(dice);
+    onRolled(applyReroll(roll(plan.diceCount), plan.rerollPolicy));
     v.repaint();
   });
   wrap.appendChild(rollBtn);

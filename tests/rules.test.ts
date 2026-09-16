@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { characterById } from '../src/data';
-import { planRoll } from '../src/rules';
+import { countSuccesses } from '../src/dice';
+import { applyReroll, planRoll } from '../src/rules';
 import type { Scenario } from '../src/types';
 import { must, scenarioFixture } from './helpers';
 
@@ -121,5 +122,42 @@ describe('planRoll', () => {
       skillBonusActive: false,
     });
     expect(plan.rerollPolicy).toBeNull();
+  });
+});
+
+describe('applyReroll', () => {
+  // planRoll only sets the flag; until this function existed the splice lived
+  // in the roll button's callback and nothing tested it at all.
+  const always = (v: number) => () => (v - 1) / 6 + 0.001; // rng yielding die `v`
+
+  test('leaves the dice alone when no policy is set', () => {
+    const dice = [6, 3, 1];
+    expect(applyReroll(dice, null)).toBe(dice);
+  });
+
+  test('replaces the highest die', () => {
+    expect(applyReroll([2, 6, 3], 'highest', always(1))).toEqual([2, 1, 3]);
+  });
+
+  // The rule is a hazard, not a bonus: a 6 that already counted as a success
+  // is replaced anyway, and the replacement can be worse.
+  test('replaces a highest die that was already a success', () => {
+    const after = applyReroll([6, 2], 'highest', always(1));
+    expect(after).toEqual([1, 2]);
+    expect(countSuccesses(after)).toBe(0);
+  });
+
+  test('replaces only the first of several tied highest dice', () => {
+    expect(applyReroll([5, 5, 2], 'highest', always(3))).toEqual([3, 5, 2]);
+  });
+
+  test('handles an empty roll without reaching the fallback', () => {
+    expect(applyReroll([], 'highest')).toEqual([]);
+  });
+
+  test('does not mutate the dice it is given', () => {
+    const dice = [4, 6];
+    applyReroll(dice, 'highest', always(2));
+    expect(dice).toEqual([4, 6]);
   });
 });

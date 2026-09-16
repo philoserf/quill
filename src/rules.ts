@@ -1,4 +1,4 @@
-import { diceForRating } from './dice';
+import { diceForRating, roll } from './dice';
 import type { Attribute, Character, Scenario } from './types';
 
 export interface RollPlan {
@@ -42,4 +42,23 @@ export function planRoll(args: {
 
   if (skillBonusActive) diceCount += 1;
   return { diceCount, rerollPolicy };
+}
+
+/** Carries out the policy `planRoll` requests. The highest die is replaced
+ *  unconditionally — including when it was already a success — which is what
+ *  makes `reroll_highest` a hazard rather than a bonus.
+ *
+ *  Lives here rather than in the roll button's callback so the mechanic sits
+ *  beside the rule that asks for it, and so it can be tested without a DOM. */
+export function applyReroll(
+  dice: number[],
+  policy: RollPlan['rerollPolicy'],
+  rng?: () => number,
+): number[] {
+  if (policy !== 'highest' || dice.length === 0) return dice;
+  const i = dice.indexOf(Math.max(...dice));
+  // roll(1) always yields one die; the fallback is for the type, not for a
+  // reachable case — see the test that pins it.
+  const replacement = roll(1, rng)[0] ?? 1;
+  return [...dice.slice(0, i), replacement, ...dice.slice(i + 1)];
 }

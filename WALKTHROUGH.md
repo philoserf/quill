@@ -12,8 +12,8 @@ afterwards they score what you wrote.
 
 There is no framework and no runtime dependency. Bun is the runtime, bundler, test runner and dev
 server; TypeScript runs strict with `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`;
-Biome formats and lints. The shipped artefact is one bundled module and a stylesheet, served as
-static files from GitHub Pages.
+Biome formats and lints TypeScript and JSON, and prettier owns markdown. The shipped artefact is
+one bundled module and a stylesheet, served as static files from GitHub Pages.
 
 `package.json` — `scripts`
 
@@ -21,17 +21,18 @@ static files from GitHub Pages.
 "dev": "bun ./public/index.html",
 "build": "bun build ./public/index.html --outdir dist && cp public/CNAME dist/CNAME",
 "test": "bun test",
-"check": "biome check --write .",
-"check:ci": "biome check . && tsc --noEmit && bun test",
-"format": "biome format --write .",
+"check": "biome check --write . && prettier --write \"**/*.md\"",
+"check:ci": "biome check . && prettier --check \"**/*.md\" && tsc --noEmit && bun test",
+"format": "biome format --write . && prettier --write \"**/*.md\"",
 "prepare": "simple-git-hooks"
 ```
 
-`check:ci` is the whole gate — lint, typecheck, tests — and a `simple-git-hooks` pre-push hook runs
-it before every push. Note what it does _not_ include: `bun run build`. Nothing local ever runs the
-bundler, so a broken reference in `public/index.html` passes every check on your machine and fails
-in CI. The workflow covers both directions: on a pull request an explicit _Verify the bundle builds_
-step, and on a push to `main` the `build` job that gates the deploy.
+`check:ci` is the whole gate — lint, markdown formatting, typecheck, tests — and a
+`simple-git-hooks` pre-push hook runs it before every push. Note what it does _not_ include:
+`bun run build`. Nothing local ever runs the bundler, so a broken reference in `public/index.html`
+passes every check on your machine and fails in CI. The workflow covers both directions: on a pull
+request an explicit _Verify the bundle builds_ step, and on a push to `main` the `build` job that
+gates the deploy.
 
 This walkthrough follows first-run execution order: page load, boot and hydration, persistence, the
 domain types, the content constants, the Setup screen, the paragraph machine, the dice and rules

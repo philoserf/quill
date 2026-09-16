@@ -1,3 +1,5 @@
+export const PARAGRAPHS_PER_LETTER = 5;
+
 export const ATTRIBUTES = ['penmanship', 'language', 'heart'] as const;
 export type Attribute = (typeof ATTRIBUTES)[number];
 export type Rating = 'poor' | 'average' | 'good';

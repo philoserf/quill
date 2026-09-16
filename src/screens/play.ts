@@ -9,6 +9,7 @@ import {
   paragraphPoints,
 } from '../scoring';
 import type { GameSession, Paragraph, Scenario } from '../types';
+import { PARAGRAPHS_PER_LETTER } from '../types';
 import { renderLetterhead } from './letterhead';
 
 export interface PlayCtx {
@@ -70,7 +71,11 @@ function draftToParagraph(d: Draft): Paragraph | null {
   };
 }
 
-const ROMAN = ['I', 'II', 'III', 'IV', 'V'];
+const ROMAN = ['I', 'II', 'III', 'IV', 'V'] as const satisfies {
+  length: typeof PARAGRAPHS_PER_LETTER;
+};
+// Unreachable while ROMAN satisfies the length above; tsc still wants a fallback.
+const LAST_NUMERAL = ROMAN[PARAGRAPHS_PER_LETTER - 1] ?? 'V';
 const STEP_LABELS = ['Word', 'Flourish', 'Language', 'Write', 'Hand'] as const;
 
 let currentDraft: Draft = emptyDraft();
@@ -417,9 +422,9 @@ function renderMarginaliaStepCard(ctx: PlayCtx): HTMLElement {
   const card = document.createElement('section');
   card.className = 'marginalia-card marginalia-card--step paper paper--side';
 
-  const roman = ROMAN[ctx.session.paragraphs.length] ?? 'V';
+  const roman = ROMAN[ctx.session.paragraphs.length] ?? LAST_NUMERAL;
   const heading = document.createElement('h4');
-  heading.textContent = `Paragraph ${roman} of V`;
+  heading.textContent = `Paragraph ${roman} of ${LAST_NUMERAL}`;
   card.appendChild(heading);
 
   card.appendChild(renderStepper(currentDraft.phase));
@@ -669,7 +674,7 @@ function renderStepDone(ctx: PlayCtx): HTMLElement {
   ptsLine.textContent = `${formatSignedPoints(pts)} points this paragraph`;
   wrap.appendChild(ptsLine);
 
-  const isLast = ctx.session.paragraphs.length === 4;
+  const isLast = ctx.session.paragraphs.length === PARAGRAPHS_PER_LETTER - 1;
   const next = document.createElement('button');
   next.type = 'button';
   next.className = 'btn btn--primary';
@@ -686,7 +691,7 @@ function renderStepDone(ctx: PlayCtx): HTMLElement {
       const skillSpent = s.skillSpent || newPara.skillUsedHere !== null;
       const paragraphs = [...s.paragraphs, newPara];
       const status: 'in_progress' | 'finished' =
-        paragraphs.length >= 5 ? 'finished' : 'in_progress';
+        paragraphs.length >= PARAGRAPHS_PER_LETTER ? 'finished' : 'in_progress';
       return { ...s, paragraphs, skillSpent, status };
     });
   });
@@ -720,7 +725,11 @@ function renderMarginaliaReferenceCard(ctx: PlayCtx): HTMLElement {
   scoreLine.className = 'running-score';
   const strong = document.createElement('strong');
   strong.textContent = String(total);
-  scoreLine.append('Running Score: ', strong, ` (after ${ctx.session.paragraphs.length} of 5)`);
+  scoreLine.append(
+    'Running Score: ',
+    strong,
+    ` (after ${ctx.session.paragraphs.length} of ${PARAGRAPHS_PER_LETTER})`,
+  );
   card.appendChild(scoreLine);
 
   const toggle = document.createElement('button');

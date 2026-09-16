@@ -28,7 +28,7 @@ Vanilla TS SPA, no framework. Entry chain: `public/index.html` → `src/main.ts`
 
 ## Historical docs
 
-`docs/superpowers/` holds the original design spec and implementation plan; neither has been touched since it was added, so read them for intent — the spec's non-goals are the clearest statement of what this app deliberately does not do — and let the code win wherever they disagree. The plan's "REQUIRED SUB-SKILL" preamble is an artifact of the initial build, not an instruction to a session working here now.
+`docs/superpowers/specs/` holds the original design spec. Read it for intent — its non-goals are the clearest statement of what this app deliberately does not do — and let the code win wherever they disagree. The implementation plan that sat beside it was deleted once the build it described had finished.
 
 ## Manual smoke test
 

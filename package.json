@@ -20,5 +20,6 @@
     "prettier": "^3.9.7",
     "simple-git-hooks": "^2.14.0",
     "typescript": "^7.0.2"
-  }
+  },
+  "version": "0.1.0"
 }

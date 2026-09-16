@@ -1,6 +1,7 @@
+import { succeeded } from '../dice';
 import { toMarkdown } from '../export';
 import { EMPTY_PARAGRAPH } from '../paragraph';
-import { fineHand, flourishHeld, formatSignedPoints, isSuperior, score } from '../scoring';
+import { formatSignedPoints, score } from '../scoring';
 import type { Character, GameSession, Scenario, Skill } from '../types';
 import { renderLetterhead } from './fragments';
 
@@ -77,15 +78,15 @@ export function renderScore(ctx: ScoreCtx): HTMLElement {
   const tbody = document.createElement('tbody');
   for (const [i, p] of ctx.session.paragraphs.entries()) {
     const pair = ctx.scenario.inkPot[p.inkPotIndex];
-    const sup = isSuperior(p.languageRoll);
+    const sup = succeeded(p.languageRoll);
     const flourish = p.flourishAdjective;
     let word = pair
       ? `"${sup ? pair.superior : pair.inferior}" (${sup ? 'superior' : 'inferior'})`
       : '—';
     if (flourish !== null) {
-      word += flourishHeld(p.heartRoll) ? ` + "${flourish}"` : ' — flourish lost';
+      word += succeeded(p.heartRoll) ? ` + "${flourish}"` : ' — flourish lost';
     }
-    const penOk = fineHand(p.penmanshipRoll);
+    const penOk = succeeded(p.penmanshipRoll);
     const hand = penOk ? 'Fine hand' : 'Plain hand';
 
     const row = document.createElement('tr');
@@ -117,8 +118,11 @@ export function renderScore(ctx: ScoreCtx): HTMLElement {
     a.download = `quill-${d}-${ctx.scenario.id}.md`;
     document.body.appendChild(a);
     a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    a.remove();
+    // The blob fetch is scheduled after the current task, so revoking inline
+    // races it — Safari and older Firefox have produced cancelled or zero-byte
+    // downloads. One turn of the event loop is enough.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   });
 
   const restart = document.createElement('button');

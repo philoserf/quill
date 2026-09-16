@@ -19,3 +19,10 @@ export function isSuccess(die: number): boolean {
 export function countSuccesses(dice: number[]): number {
   return dice.filter(isSuccess).length;
 }
+
+/** The rulebook's one success rule: a roll succeeds if any die shows 5 or 6.
+ *  Accepts null because a roll that never happened did not succeed — which is
+ *  what the Heart roll is when the player writes plainly. */
+export function succeeded(dice: number[] | null): boolean {
+  return dice !== null && countSuccesses(dice) > 0;
+}

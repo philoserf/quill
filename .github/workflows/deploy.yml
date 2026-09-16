@@ -40,6 +40,12 @@ jobs:
       contents: read
       pages: write
       id-token: write
+    # Same group as deploy, so two pushes in quick succession build in commit
+    # order. On deploy alone, their builds race and the older artifact can
+    # publish last, leaving the site a commit behind.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
 
@@ -63,6 +69,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pages: write
       id-token: write
     concurrency:

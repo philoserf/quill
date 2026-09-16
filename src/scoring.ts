@@ -1,11 +1,10 @@
 import { countSuccesses } from './dice';
-import type { ConsequenceTier, GameSession, Paragraph, Scenario, TierName } from './types';
-import { TIER_NAMES } from './types';
+import type { GameSession, Paragraph, TierName } from './types';
+import { LOWEST_TIER, TIERS } from './types';
 
 export interface ScoreResult {
   paragraphs: number[];
   total: number;
-  tier: ConsequenceTier;
   tierName: TierName;
 }
 
@@ -39,19 +38,16 @@ export function paragraphPoints(p: Paragraph): number {
   return pts;
 }
 
-export function score(session: GameSession, scenario: Scenario): ScoreResult {
+export function tierFor(total: number): TierName {
+  for (const tier of TIERS) {
+    if (total >= tier.threshold) return tier.name;
+  }
+  // Only reachable for a negative total: floor it to the lowest tier.
+  return LOWEST_TIER;
+}
+
+export function score(session: GameSession): ScoreResult {
   const paragraphs = session.paragraphs.map(paragraphPoints);
   const total = paragraphs.reduce((a, b) => a + b, 0);
-
-  // Tier lookup: highest threshold ≤ total. Floor negatives to lowest tier.
-  const sorted = [...scenario.consequences].sort((a, b) => a.threshold - b.threshold);
-  const fallback = sorted[0];
-  if (!fallback) throw new Error('Scenario has no consequence tiers');
-  let tier: ConsequenceTier = fallback;
-  for (const c of sorted) {
-    if (total >= c.threshold) tier = c;
-  }
-
-  const tierName = TIER_NAMES[tier.threshold as keyof typeof TIER_NAMES];
-  return { paragraphs, total, tier, tierName };
+  return { paragraphs, total, tierName: tierFor(total) };
 }

@@ -1,25 +1,23 @@
 import { describe, expect, test } from 'bun:test';
 import { CHARACTERS, SKILLS } from '../src/data';
 import { toMarkdown } from '../src/export';
-import type { GameSession, Scenario } from '../src/types';
-import { must } from './helpers';
+import type { GameSession } from '../src/types';
+import { must, scenarioFixture } from './helpers';
 
-const scenario: Scenario = {
+const scenario = scenarioFixture({
   id: 'archduke',
   title: 'The Archduke',
-  profile: [],
-  rulesOfCorrespondence: [],
   inkPot: [
     { inferior: 'Death', superior: 'Passing' },
     { inferior: 'Town', superior: 'Riverton' },
   ],
-  consequences: [
-    { threshold: 0, text: 'bad' },
-    { threshold: 5, text: 'tepid' },
-    { threshold: 8, text: 'The Archduke thanks you for your kind letter.' },
-    { threshold: 11, text: 'great' },
-  ],
-};
+  consequences: {
+    unsuccessful: 'bad',
+    tepid: 'Mild offence is taken.',
+    favourable: 'The Archduke thanks you for your kind letter.',
+    excellent: 'great',
+  },
+});
 
 const session: GameSession = {
   id: 'g',
@@ -116,6 +114,6 @@ describe('toMarkdown', () => {
   test('total score and consequence text appear at the end', () => {
     const md = toMarkdown(session, scenario, CHARACTERS, SKILLS);
     expect(md).toContain('**Total**: 5 / tepid');
-    expect(md).toContain('> tepid');
+    expect(md).toContain('> Mild offence is taken.');
   });
 });

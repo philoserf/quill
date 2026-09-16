@@ -2,21 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import { characterById } from '../src/data';
 import { planRoll } from '../src/rules';
 import type { Scenario } from '../src/types';
-import { must } from './helpers';
+import { must, scenarioFixture } from './helpers';
 
-const baseScenario: Scenario = {
-  id: 'test',
-  title: 'Test',
-  profile: [],
-  rulesOfCorrespondence: [],
-  inkPot: [],
-  consequences: [
-    { threshold: 0, text: '' },
-    { threshold: 5, text: '' },
-    { threshold: 8, text: '' },
-    { threshold: 11, text: '' },
-  ],
-};
+const baseScenario = scenarioFixture();
 
 describe('planRoll', () => {
   test('uses character base attribute when no modifiers apply', () => {

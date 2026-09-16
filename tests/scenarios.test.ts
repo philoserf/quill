@@ -1,134 +1,64 @@
 import { describe, expect, test } from 'bun:test';
-import { loadScenarios, validateScenario } from '../src/scenarios';
+import { CHARACTERS } from '../src/data';
+import { SCENARIOS } from '../src/scenarios';
+import { PARAGRAPHS_PER_LETTER } from '../src/types';
 
-describe('validateScenario', () => {
-  const valid = {
-    id: 'x',
-    title: 'X',
-    profile: ['hello'],
-    rulesOfCorrespondence: [],
-    inkPot: [{ inferior: 'a', superior: 'b' }],
-    consequences: [
-      { threshold: 0, text: 'a' },
-      { threshold: 5, text: 'b' },
-      { threshold: 8, text: 'c' },
-      { threshold: 11, text: 'd' },
-    ],
-  };
+// `SCENARIOS` is `Scenario`-typed, so tsc already enforces its shape: the modifier
+// discriminant, attribute names, field types, and that no extra keys sneak in.
+// These tests cover only what the type system cannot express.
 
-  test('accepts a well-formed scenario', () => {
-    expect(() => validateScenario(valid)).not.toThrow();
-  });
-
-  test('rejects missing thresholds', () => {
-    const bad = {
-      ...valid,
-      consequences: [
-        { threshold: 0, text: '' },
-        { threshold: 5, text: '' },
-        { threshold: 8, text: '' },
-      ],
-    };
-    expect(() => validateScenario(bad)).toThrow(/thresholds/i);
-  });
-
-  test('rejects unknown modifier types', () => {
-    const bad = {
-      ...valid,
-      rulesOfCorrespondence: [{ type: 'magic', attribute: 'heart', description: 'no' }],
-    };
-    expect(() => validateScenario(bad)).toThrow(/unknown modifier type/i);
-  });
-
-  test('rejects dice_bonus with non-integer amount', () => {
-    const bad = {
-      ...valid,
-      rulesOfCorrespondence: [
-        { type: 'dice_bonus', attribute: 'heart', amount: 1.5, description: 'x' },
-      ],
-    };
-    expect(() => validateScenario(bad)).toThrow(/positive integer/i);
-  });
-
-  test('rejects dice_bonus with NaN amount', () => {
-    const bad = {
-      ...valid,
-      rulesOfCorrespondence: [
-        { type: 'dice_bonus', attribute: 'heart', amount: Number.NaN, description: 'x' },
-      ],
-    };
-    expect(() => validateScenario(bad)).toThrow(/positive integer/i);
-  });
-
-  test('rejects dice_bonus with zero or negative amount', () => {
-    const bad = {
-      ...valid,
-      rulesOfCorrespondence: [
-        { type: 'dice_bonus', attribute: 'heart', amount: 0, description: 'x' },
-      ],
-    };
-    expect(() => validateScenario(bad)).toThrow(/positive integer/i);
-  });
-
-  test('rejects dice_bonus appliesTo: null', () => {
-    const bad = {
-      ...valid,
-      rulesOfCorrespondence: [
-        {
-          type: 'dice_bonus',
-          attribute: 'heart',
-          amount: 1,
-          appliesTo: null,
-          description: 'x',
-        },
-      ],
-    };
-    expect(() => validateScenario(bad)).toThrow(/appliesTo must be an object/i);
-  });
-
-  test('rejects dice_bonus appliesTo with empty characters array', () => {
-    const bad = {
-      ...valid,
-      rulesOfCorrespondence: [
-        {
-          type: 'dice_bonus',
-          attribute: 'heart',
-          amount: 1,
-          appliesTo: { characters: [] },
-          description: 'x',
-        },
-      ],
-    };
-    expect(() => validateScenario(bad)).toThrow(/at least one id/i);
-  });
-
-  test('rejects dice_bonus appliesTo with unknown character id', () => {
-    const bad = {
-      ...valid,
-      rulesOfCorrespondence: [
-        {
-          type: 'dice_bonus',
-          attribute: 'heart',
-          amount: 1,
-          appliesTo: { characters: ['wizard'] },
-          description: 'x',
-        },
-      ],
-    };
-    expect(() => validateScenario(bad)).toThrow(/unknown id\(s\): wizard/i);
-  });
-
-  test('rejects empty inkPot', () => {
-    const bad = { ...valid, inkPot: [] };
-    expect(() => validateScenario(bad)).toThrow(/inkPot/i);
-  });
-});
-
-describe('loadScenarios', () => {
-  test('loads and validates all bundled scenarios', () => {
-    const ids = loadScenarios()
-      .map((s) => s.id)
-      .sort();
+describe('SCENARIOS', () => {
+  test('contains exactly the four rulebook scenarios', () => {
+    const ids = SCENARIOS.map((s) => s.id).sort();
     expect(ids).toEqual(['archduke', 'art-dealer', 'father', 'king']);
+  });
+
+  test('ids are unique', () => {
+    expect(new Set(SCENARIOS.map((s) => s.id)).size).toBe(SCENARIOS.length);
+  });
+
+  test('every ink pot holds at least one word per paragraph', () => {
+    // A word is retired once used, and the ink pot is the only interactive
+    // control during PICK_WORD. Fewer entries than paragraphs deadlocks the
+    // play screen with no way out but clearing localStorage.
+    const short = SCENARIOS.filter((s) => s.inkPot.length < PARAGRAPHS_PER_LETTER).map(
+      (s) => `${s.id} has ${s.inkPot.length}`,
+    );
+    expect(short).toEqual([]);
+  });
+
+  test('every dice_bonus amount is a positive integer', () => {
+    const bad = SCENARIOS.flatMap((s) =>
+      s.rulesOfCorrespondence
+        .filter((m) => m.type === 'dice_bonus')
+        .filter((m) => !Number.isInteger(m.amount) || m.amount <= 0)
+        .map((m) => `${s.id}: ${m.attribute} amount ${m.amount}`),
+    );
+    expect(bad).toEqual([]);
+  });
+
+  test('every appliesTo names a real character id', () => {
+    // The only place scenario modifiers are joined to CHARACTERS. `Character.id`
+    // is a plain string, so tsc cannot check this: renaming a character id would
+    // otherwise silently stop a modifier ever applying.
+    const known = new Set(CHARACTERS.map((c) => c.id));
+    const unknown = SCENARIOS.flatMap((s) =>
+      s.rulesOfCorrespondence.flatMap((m) =>
+        (m.type === 'dice_bonus' ? (m.appliesTo?.characters ?? []) : [])
+          .filter((id) => !known.has(id))
+          .map((id) => `${s.id}: ${id}`),
+      ),
+    );
+    expect(unknown).toEqual([]);
+  });
+
+  test('every scenario carries prose in all four tiers and a profile', () => {
+    const empty = SCENARIOS.flatMap((s) => [
+      ...(s.profile.length > 0 ? [] : [`${s.id}: empty profile`]),
+      ...Object.entries(s.consequences)
+        .filter(([, text]) => text.trim() === '')
+        .map(([tier]) => `${s.id}: empty ${tier}`),
+    ]);
+    expect(empty).toEqual([]);
   });
 });

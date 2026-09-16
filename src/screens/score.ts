@@ -18,7 +18,7 @@ export function renderScore(ctx: ScoreCtx): HTMLElement {
   const root = document.createElement('section');
   root.className = 'screen screen--score';
 
-  const result = score(ctx.session, ctx.scenario);
+  const result = score(ctx.session);
 
   const banner = document.createElement('div');
   banner.className = 'score-banner';
@@ -32,7 +32,7 @@ export function renderScore(ctx: ScoreCtx): HTMLElement {
   tierName.textContent = `${withIndefiniteArticle(result.tierName)} letter`;
   const consequenceLine = document.createElement('p');
   consequenceLine.className = 'consequence';
-  consequenceLine.textContent = result.tier.text;
+  consequenceLine.textContent = ctx.scenario.consequences[result.tierName];
   banner.append(seal, tierName, consequenceLine);
   root.appendChild(banner);
 

@@ -1,5 +1,5 @@
 import { characterById, skillById } from './data';
-import { loadScenarios } from './scenarios';
+import { SCENARIOS } from './scenarios';
 import { renderPlay } from './screens/play';
 import { renderScore } from './screens/score';
 import { renderSetup } from './screens/setup';
@@ -90,7 +90,7 @@ function mount(scenarios: Scenario[]) {
 }
 
 try {
-  mount(loadScenarios());
+  mount(SCENARIOS);
 } catch (err) {
   const root = document.getElementById('app');
   if (root) root.textContent = `Failed to load Quill: ${(err as Error).message}`;

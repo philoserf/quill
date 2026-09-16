@@ -33,7 +33,7 @@ export function toMarkdown(
   const skill = skills.find((s) => s.id === session.skillId);
   if (!character || !skill) throw new Error('Unknown character or skill in session');
 
-  const result = score(session, scenario);
+  const result = score(session);
   const date = session.startedAt.slice(0, 10);
 
   const frontmatter = [
@@ -67,7 +67,7 @@ export function toMarkdown(
     '',
     `**Total**: ${result.total} / ${result.tierName}`,
     '',
-    `> ${result.tier.text}`,
+    `> ${scenario.consequences[result.tierName]}`,
     '',
   ].join('\n');
 

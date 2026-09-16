@@ -1,22 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { score } from '../src/scoring';
-import type { ConsequenceTier, GameSession, Paragraph, Scenario } from '../src/types';
-
-const consequences: ConsequenceTier[] = [
-  { threshold: 0, text: 'bad' },
-  { threshold: 5, text: 'tepid' },
-  { threshold: 8, text: 'good' },
-  { threshold: 11, text: 'great' },
-];
-
-const scenario: Scenario = {
-  id: 's',
-  title: 'S',
-  profile: [],
-  rulesOfCorrespondence: [],
-  inkPot: [],
-  consequences,
-};
+import { score, tierFor } from '../src/scoring';
+import type { GameSession, Paragraph, TierName } from '../src/types';
 
 function para(overrides: Partial<Paragraph>): Paragraph {
   return {
@@ -47,12 +31,12 @@ function session(paragraphs: Paragraph[]): GameSession {
 
 describe('score', () => {
   test('plain inferior word + failed penmanship → 0 points', () => {
-    const r = score(session([para({ languageRoll: [2], penmanshipRoll: [1] })]), scenario);
+    const r = score(session([para({ languageRoll: [2], penmanshipRoll: [1] })]));
     expect(r.paragraphs[0]).toBe(0);
   });
 
   test('plain superior + successful penmanship → 2 points', () => {
-    const r = score(session([para({ languageRoll: [5], penmanshipRoll: [6] })]), scenario);
+    const r = score(session([para({ languageRoll: [5], penmanshipRoll: [6] })]));
     expect(r.paragraphs[0]).toBe(2);
   });
 
@@ -67,7 +51,6 @@ describe('score', () => {
           penmanshipRoll: [5],
         }),
       ]),
-      scenario,
     );
     expect(r.paragraphs[0]).toBe(3);
   });
@@ -83,7 +66,6 @@ describe('score', () => {
           penmanshipRoll: [3],
         }),
       ]),
-      scenario,
     );
     expect(r.paragraphs[0]).toBe(-1);
   });
@@ -99,14 +81,13 @@ describe('score', () => {
           penmanshipRoll: [3],
         }),
       ]),
-      scenario,
     );
     // Heart failed → flourish doesn't apply. Superior word still scores +1.
     expect(r.paragraphs[0]).toBe(1);
   });
 
   test('penmanship caps at +1 even with multiple successes', () => {
-    const r = score(session([para({ languageRoll: [2], penmanshipRoll: [5, 6, 5] })]), scenario);
+    const r = score(session([para({ languageRoll: [2], penmanshipRoll: [5, 6, 5] })]));
     expect(r.paragraphs[0]).toBe(1);
   });
 
@@ -119,10 +100,8 @@ describe('score', () => {
         para({ languageRoll: [5], penmanshipRoll: [5] }), // 2
         para({ languageRoll: [5], penmanshipRoll: [5] }), // 2
       ]),
-      scenario,
     );
     expect(r.total).toBe(10);
-    expect(r.tier.threshold).toBe(8);
     expect(r.tierName).toBe('favourable');
   });
 
@@ -137,10 +116,28 @@ describe('score', () => {
           penmanshipRoll: [1],
         }),
       ]),
-      scenario,
     );
     expect(r.total).toBe(-1);
-    expect(r.tier.threshold).toBe(0);
     expect(r.tierName).toBe('unsuccessful');
+  });
+});
+
+describe('tierFor', () => {
+  // Pins every boundary, including the four exact thresholds no test in this
+  // suite has ever produced: reaching a total of 11 through score() needs six
+  // fabricated paragraphs, here it is one number.
+  const cases: [number, TierName][] = [
+    [-1, 'unsuccessful'],
+    [0, 'unsuccessful'],
+    [4, 'unsuccessful'],
+    [5, 'tepid'],
+    [7, 'tepid'],
+    [8, 'favourable'],
+    [10, 'favourable'],
+    [11, 'excellent'],
+    [99, 'excellent'],
+  ];
+  test.each(cases)('tierFor(%i) is %s', (total, name) => {
+    expect(tierFor(total)).toBe(name);
   });
 });

@@ -14,11 +14,13 @@ Vanilla TS SPA, no framework. Entry chain: `public/index.html` → `src/main.ts`
 
 **Play screen draft state** — `src/screens/play.ts` holds a module-level `currentDraft` for the in-progress paragraph (phase, ink-pot pick, flourish, rolls, text). It is **deliberately not in the persisted store**: only completed paragraphs land in `session.paragraphs` when the player advances from `PARAGRAPH_DONE`. The draft is reset BEFORE calling `onUpdate` (see comment in `renderStepDone`) — the store notifies synchronously, so resetting after would cause the re-render to read stale phase state and re-show the same screen.
 
-**Scenarios are bundled at build time** — `src/scenarios.ts` uses `import scenario from '../public/scenarios/foo.json' with { type: 'json' }` and runs every payload through `validateScenario`. Bun's HTML dev server doesn't serve sibling JSON via fetch (it returns the SPA HTML), so bundling is the only path that works in both dev and prod. **To add a scenario**: drop the JSON in `public/scenarios/`, add the import + entry to the `BUNDLED` array. The validator requires `consequences` to have exactly the thresholds `[0, 5, 8, 11]` (matches `TIER_NAMES` in `src/types.ts`).
+**Scenarios are typed constants** — `src/scenarios.ts` exports `SCENARIOS: Scenario[]`, transcribed from the Quill rulebook. There is no runtime validation: the `Scenario` type is the gate, so a malformed scenario is a compile error rather than a startup throw. **To add a scenario**: add an entry to `SCENARIOS`. What `tsc` cannot check lives in `tests/scenarios.test.ts` — ink pots holding at least `PARAGRAPHS_PER_LETTER` words, `dice_bonus` amounts being positive integers, and `appliesTo` naming real character ids. Note `bun test` alone does not type-check; `bun run check:ci` is what catches a malformed constant.
+
+**Tier thresholds have one home** — `TIERS` in `src/types.ts` is the ordered table of score boundaries and tier names, and `TierName` derives from it. `Scenario.consequences` is a `Record<TierName, string>`, so a scenario supplies four strings and cannot vary the boundaries. `tierFor(total)` in `src/scoring.ts` is the only lookup.
 
 **Game logic** lives in `dice.ts`, `rules.ts`, `scoring.ts`, and `export.ts`. Two couplings the files don't show on their own: `dice_bonus` modifiers in `rules.ts` may be character-gated via `appliesTo.characters`, and the `reroll_highest` policy is resolved not in `rules.ts` but inside `renderRollStep` in the play screen, the shared step behind all three attribute rolls.
 
-**Data**: `src/data.ts` ships the 6 characters and 3 skills as hard-coded constants (rulebook content); scenarios are JSON for easier authoring.
+**Data**: `src/data.ts` ships the 6 characters and 3 skills, `src/scenarios.ts` the 4 scenarios — all hard-coded constants carrying rulebook content.
 
 ## TypeScript conventions
 

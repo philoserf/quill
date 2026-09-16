@@ -37,18 +37,13 @@ export type Modifier =
       description: string;
     };
 
-export interface ConsequenceTier {
-  threshold: number;
-  text: string;
-}
-
 export interface Scenario {
   id: string;
   title: string;
   profile: string[];
   rulesOfCorrespondence: Modifier[];
   inkPot: InkPotEntry[];
-  consequences: ConsequenceTier[];
+  consequences: Record<TierName, string>;
 }
 
 export interface Paragraph {
@@ -73,11 +68,15 @@ export interface GameSession {
   status: 'in_progress' | 'finished';
 }
 
-export const TIER_NAMES = {
-  0: 'unsuccessful',
-  5: 'tepid',
-  8: 'favourable',
-  11: 'excellent',
-} as const;
+// Ordered high to low: the first threshold a total clears wins. The single
+// home for both the boundaries and the names — TierName derives from it.
+export const LOWEST_TIER = 'unsuccessful';
 
-export type TierName = (typeof TIER_NAMES)[keyof typeof TIER_NAMES];
+export const TIERS = [
+  { threshold: 11, name: 'excellent' },
+  { threshold: 8, name: 'favourable' },
+  { threshold: 5, name: 'tepid' },
+  { threshold: 0, name: LOWEST_TIER },
+] as const;
+
+export type TierName = (typeof TIERS)[number]['name'];

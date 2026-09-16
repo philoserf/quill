@@ -18,6 +18,17 @@ export function renderSetup(ctx: SetupCtx): HTMLElement {
   const root = document.createElement('section');
   root.className = 'screen screen--setup';
   const state: SetupState = { characterId: null, skillId: null, scenarioId: null };
+  // Selecting rebuilds the whole screen, destroying the focused card. Arrow-key
+  // navigation would otherwise drop focus to the body on every move.
+  let focusAfterRender: string | null = null;
+
+  function choose(kind: string, apply: (id: string) => void) {
+    return (item: { id: string }) => {
+      apply(item.id);
+      focusAfterRender = cardId(kind, item.id);
+      render();
+    };
+  }
 
   function render() {
     root.replaceChildren();
@@ -45,10 +56,9 @@ export function renderSetup(ctx: SetupCtx): HTMLElement {
         name: (c) => c.name,
         blurb: (c) => c.flavor[0] ?? '',
         extra: renderAttributePips,
-        onSelect: (c) => {
-          state.characterId = c.id;
-          render();
-        },
+        onSelect: choose('character', (id) => {
+          state.characterId = id;
+        }),
       }),
     );
 
@@ -62,10 +72,9 @@ export function renderSetup(ctx: SetupCtx): HTMLElement {
           selectedId: state.skillId,
           name: (s) => s.name,
           blurb: (s) => s.description,
-          onSelect: (s) => {
-            state.skillId = s.id;
-            render();
-          },
+          onSelect: choose('skill', (id) => {
+            state.skillId = id;
+          }),
         }),
       );
     }
@@ -79,10 +88,9 @@ export function renderSetup(ctx: SetupCtx): HTMLElement {
         selectedId: state.scenarioId,
         name: (s) => s.title,
         blurb: (s) => s.profile[0] ?? '',
-        onSelect: (s) => {
-          state.scenarioId = s.id;
-          render();
-        },
+        onSelect: choose('scenario', (id) => {
+          state.scenarioId = id;
+        }),
       });
       const chosen = ctx.scenarios.find((s) => s.id === state.scenarioId);
       if (chosen) {
@@ -112,6 +120,11 @@ export function renderSetup(ctx: SetupCtx): HTMLElement {
       beginRow.appendChild(begin);
       root.appendChild(beginRow);
     }
+
+    if (focusAfterRender) {
+      document.getElementById(focusAfterRender)?.focus();
+      focusAfterRender = null;
+    }
   }
 
   render();
@@ -125,6 +138,25 @@ export function renderSetup(ctx: SetupCtx): HTMLElement {
  *  accessible name from the subtree — so a card with an `<h3>` plus a flavour
  *  paragraph plus pip labels announced as all of it at once. The `aria-label`
  *  below is the name; everything else is presentation. */
+/** The card id, shared between the builder below and the focus restoration in
+ *  `renderSetup` — selecting re-renders the whole screen, so the card that was
+ *  focused has to be found again by name. */
+function cardId(kind: string, itemId: string): string {
+  return `${kind}-${itemId}`;
+}
+
+/** The three selection steps are one rendering rule with a different noun.
+ *
+ *  Card children are phrasing content on purpose: `<button>`'s content model
+ *  forbids headings, paragraphs and lists. The name comes from the title span
+ *  via `aria-labelledby`, with the blurb and pips as the description — an
+ *  `aria-label` would replace the subtree name and hide the attribute ratings
+ *  the choice is based on.
+ *
+ *  The group is a radiogroup rather than a row of toggle buttons, because
+ *  picking a character is one choice of six, not six independent switches.
+ *  That brings the keyboard contract with it: one tab stop for the group,
+ *  arrows to move and select within it, Home/End for the ends. */
 function renderChoiceStep<T extends { id: string }>(opts: {
   kind: string;
   title: string;
@@ -140,6 +172,7 @@ function renderChoiceStep<T extends { id: string }>(opts: {
   wrap.className = 'step paper';
 
   const h = document.createElement('h2');
+  h.id = `${opts.kind}-heading`;
   h.textContent = opts.title;
   const prompt = document.createElement('p');
   prompt.className = 'step__prompt';
@@ -148,14 +181,26 @@ function renderChoiceStep<T extends { id: string }>(opts: {
 
   const grid = document.createElement('div');
   grid.className = 'card-grid';
-  for (const item of opts.items) {
+  grid.setAttribute('role', 'radiogroup');
+  grid.setAttribute('aria-labelledby', h.id);
+
+  // Roving tabindex: the group is one tab stop, landing on the current choice
+  // or the first option when nothing is chosen yet.
+  const selectedIndex = opts.items.findIndex((i) => i.id === opts.selectedId);
+  const tabbableIndex = selectedIndex === -1 ? 0 : selectedIndex;
+
+  const cards: HTMLButtonElement[] = [];
+  opts.items.forEach((item, index) => {
     const selected = opts.selectedId === item.id;
     const card = document.createElement('button');
     card.type = 'button';
+    card.id = cardId(opts.kind, item.id);
     card.className = `card${selected ? ' card--selected' : ''}`;
-    card.setAttribute('aria-pressed', String(selected));
+    card.setAttribute('role', 'radio');
+    card.setAttribute('aria-checked', String(selected));
+    card.tabIndex = index === tabbableIndex ? 0 : -1;
 
-    const base = `${opts.kind}-${item.id}`;
+    const base = card.id;
     const title = document.createElement('span');
     title.className = 'card__title';
     title.id = `${base}-title`;
@@ -166,9 +211,6 @@ function renderChoiceStep<T extends { id: string }>(opts: {
     blurb.textContent = opts.blurb(item);
     card.append(title, blurb);
 
-    // Name from the title alone; the rest stays reachable as the description.
-    // An aria-label here would *replace* the subtree name, which would hide the
-    // attribute pips — the whole basis for choosing a character.
     const describedBy = [blurb.id];
     if (opts.extra) {
       const detail = opts.extra(item);
@@ -180,8 +222,40 @@ function renderChoiceStep<T extends { id: string }>(opts: {
     card.setAttribute('aria-describedby', describedBy.join(' '));
 
     card.addEventListener('click', () => opts.onSelect(item));
+    cards.push(card);
     grid.appendChild(card);
-  }
+  });
+
+  grid.addEventListener('keydown', (event) => {
+    const from = cards.indexOf(document.activeElement as HTMLButtonElement);
+    if (from === -1) return;
+    const last = cards.length - 1;
+    let to: number;
+    switch (event.key) {
+      case 'ArrowRight':
+      case 'ArrowDown':
+        to = from === last ? 0 : from + 1;
+        break;
+      case 'ArrowLeft':
+      case 'ArrowUp':
+        to = from === 0 ? last : from - 1;
+        break;
+      case 'Home':
+        to = 0;
+        break;
+      case 'End':
+        to = last;
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+    // The radio pattern selects as it moves; `onSelect` re-renders, and
+    // `renderSetup` restores focus to the card that was chosen.
+    const target = opts.items[to];
+    if (target) opts.onSelect(target);
+  });
+
   wrap.appendChild(grid);
   return wrap;
 }

@@ -1,5 +1,7 @@
 # Quill
 
+![Status: Stable](https://img.shields.io/badge/Status-Stable-brightgreen.svg)
+
 A local web app for playing Scott Malthouse's [Quill](https://www.drivethrurpg.com/) — a single-player letter-writing roleplaying game. Pick a character, scenario, and skill; write a five-paragraph letter under the dice mechanics; export the finished letter as Markdown.
 
 Play it at <https://quill.philoserf.com>.

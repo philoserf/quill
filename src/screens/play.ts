@@ -294,7 +294,8 @@ function renderWriteSlot(v: PlayView): HTMLElement {
   wrap.appendChild(indicator);
 
   ta.addEventListener('input', () => {
-    v.state.draft.text = ta.value;
+    // No repaint: the textarea already shows what was typed.
+    v.state.draft = advance(v.state.draft, { type: 'setText', text: ta.value });
     updateIndicator();
   });
 
@@ -393,7 +394,7 @@ function renderStepFlourish(v: PlayView): HTMLElement {
   input.value = v.state.draft.flourishAdjective;
   input.className = 'flourish-input';
   input.addEventListener('input', () => {
-    v.state.draft.flourishAdjective = input.value;
+    v.state.draft = advance(v.state.draft, { type: 'setFlourish', adjective: input.value });
   });
   wrap.appendChild(input);
 
@@ -402,11 +403,13 @@ function renderStepFlourish(v: PlayView): HTMLElement {
   attempt.className = 'btn btn--primary';
   attempt.textContent = 'Attempt it';
   attempt.addEventListener('click', () => {
-    if (!v.state.draft.flourishAdjective.trim()) {
+    const next = advance(v.state.draft, { type: 'attemptFlourish' });
+    if (next === v.state.draft) {
+      // advance refused a blank word; point the player at the field.
       input.focus();
       return;
     }
-    v.state.draft = advance(v.state.draft, { type: 'attemptFlourish' });
+    v.state.draft = next;
     v.repaint();
   });
 
@@ -469,7 +472,7 @@ function renderRollStep(
     spend.className = 'btn btn--skill';
     spend.textContent = `Spend ${v.skill.name} — +1 die (once per letter)`;
     spend.addEventListener('click', () => {
-      v.state.draft.skillUsedHere = attr;
+      v.state.draft = advance(v.state.draft, { type: 'spendSkill', attribute: attr });
       v.repaint();
     });
     wrap.appendChild(spend);

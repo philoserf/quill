@@ -42,7 +42,7 @@ The rest of the configuration lives outside the repository:
 ## Manual smoke test
 
 1. `bun run dev`, open the URL.
-2. Pick a character, a skill, and a scenario; click _Begin letter_.
+2. Pick a character, a skill, and a scenario; click _Begin the letter_.
 3. Write all five paragraphs through to the Score screen.
 4. Click _Download letter (.md)_; confirm the file lands in Downloads.
 5. Reload during play; confirm the in-progress letter restores.

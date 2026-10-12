@@ -11,6 +11,8 @@
 - A saved letter whose paragraphs are malformed is now quarantined to the `.corrupt` backup on load, instead of crashing the page.
 - _Start a new letter_ on the error screen now sets the letter aside as a backup instead of deleting it, so a crash the app did not anticipate no longer erases the player's only copy.
 - A flourish containing `\|` no longer splits a cell in the exported game-record table.
+- A saved letter whose scenario, character or skill no longer exists is set aside as a backup instead of being deleted.
+- A paragraph of only spaces or line breaks now shows _(empty paragraph)_ on screen, as it already did in the export.
 
 ## 0.2.0
 

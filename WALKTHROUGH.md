@@ -1,19 +1,52 @@
 # Quill — a walkthrough
 
-This document follows the code of Quill from the moment the browser loads the page to the moment a finished letter is downloaded as Markdown. It reads the source in the order it runs, quoting the lines that carry each idea. Every quoted block is labelled with its file and the symbol it came from; the quotes are verbatim, with `...` marking an elided middle.
+This document follows the code in the order it runs: from the HTML page that boots the app, through the three screens a player passes through, down into the rules that turn dice into points, and out through the Markdown export. Every quoted block names its file and the symbol it comes from; the quotes are verbatim, with `...` marking an elided middle.
 
 ## Overview
 
-Quill is a browser implementation of Scott Malthouse's single-player letter-writing roleplaying game. The player picks a character, a skill and a scenario, then writes a five-paragraph letter. Each paragraph is shaped by dice: a word drawn from the scenario's _ink pot_ comes out in its inferior or superior form, an optional flourish holds or fails, and the hand is fine or plain. The five paragraphs add up to a score, the score picks one of four consequences the scenario defines, and the letter can be exported as a Markdown file.
+Quill is a browser version of Scott Malthouse's letter-writing roleplaying game. The player picks a character, a skill and a scenario, then writes a five-paragraph letter. Each paragraph is built around one word from the scenario's _ink pot_ and passes through up to three dice tests — Heart (does an optional flourish hold?), Language (does the player get the superior word?) and Penmanship (is the hand fine?). The points from those tests add up to a tier, and the scenario says how the recipient responds to a letter of that tier. The finished letter can be downloaded as Markdown.
 
-The technology is deliberately small:
+Technology is deliberately thin:
 
-- **TypeScript with no framework.** Every screen builds its DOM with `document.createElement` and returns an `HTMLElement`.
-- **Bun** as runtime, bundler (`bun build`), dev server (`bun ./public/index.html`) and test runner (`bun test`).
-- **`localStorage`** as the only persistence. There is no server-side state at all.
-- **A Cloudflare Worker serving static assets** from `dist/` at `quill.philoserf.com`, deployed by hand with `task deploy`. There is no CI; pushing deploys nothing.
+- **TypeScript, no framework.** Every screen is a function that builds DOM nodes with `document.createElement` and returns an `HTMLElement`.
+- **Bun** bundles (`bun build ./public/index.html --outdir dist`), serves in development, and runs the tests (`bun test`).
+- **`localStorage`** is the only persistence. There is no server-side state.
+- **A Cloudflare Worker** serves the built `dist/` directory as static assets (`wrangler.jsonc`), at `quill.philoserf.com`. It is deployed by hand with `task deploy`; there is no CI.
 
-There is one entry point. `public/index.html` loads `src/main.ts`, which mounts one of three screens into `<main id="app">`.
+There is one entry point: `public/index.html`, which loads `src/main.ts` as a module.
+
+## Architecture
+
+```text
+public/
+  index.html          the page shell: <main id="app"> and the module script
+  styles.css          all styling
+src/
+  main.ts             boot: hydrate the stored session, pick a screen, own the commit path
+  store.ts            localStorage: load / save / discard, with quarantine
+  types.ts            domain types, PARAGRAPHS_PER_LETTER, the TIERS table
+  data.ts             the 6 characters and 3 skills (rulebook constants)
+  scenarios.ts        the 4 scenarios (rulebook constants)
+  paragraph.ts        the per-paragraph state machine, commit, the empty-prose rule
+  dice.ts             rolling and the success rule
+  rules.ts            how many dice a roll gets, and the re-roll mechanic
+  scoring.ts          points per paragraph, total, tier
+  export.ts           the Markdown letter
+  screens/
+    setup.ts          choose character, skill, scenario
+    play.ts           write the five paragraphs
+    score.ts          the finished letter, breakdown, download, restart
+    fragments.ts      letterhead and scenario detail, shared by two screens
+tests/                bun tests for every non-screen module
+```
+
+The module boundaries follow one rule: **game logic never touches the DOM, and screens never touch storage.** `dice.ts`, `rules.ts`, `scoring.ts`, `paragraph.ts` and `export.ts` are pure functions over plain data, which is why they are the tested part of the code. The screens call into them and report back to `main.ts` through callbacks (`onBegin`, `onCommit`, `onRestart`). Only `main.ts` calls the store.
+
+Data flows in one loop. `main.ts` holds the current `GameSession | null` in a closure. A screen callback hands it a new session; `main.ts` saves it and re-renders the root. Everything that happens _within_ a paragraph — picking a word, rolling, typing — lives in the play screen's own closure and is neither saved nor seen by `main.ts` until the paragraph is committed.
+
+## Boot: from the page to the first screen
+
+The page is an empty `<main id="app">` and one module script:
 
 `public/index.html` — `body`
 
@@ -24,45 +57,53 @@ There is one entry point. `public/index.html` loads `src/main.ts`, which mounts 
   </body>
 ```
 
-## Architecture
+`bun build` follows that script tag, bundles `src/main.ts` and everything it imports, and rewrites the tag to point at a hashed bundle in `dist/`. The bottom of `main.ts` is the whole of the startup sequence: call `mount` with the scenario constants, and if that throws, replace the page with a way out.
 
-```text
-public/
-  index.html          entry document; Bun bundles from here
-  styles.css          all styling
-src/
-  main.ts             boot, hydration, the session closure, screen dispatch
-  store.ts            localStorage: load / save / clear / discard
-  types.ts            domain types, PARAGRAPHS_PER_LETTER, TIERS
-  data.ts             the six characters and three skills
-  scenarios.ts        the four scenarios
-  paragraph.ts        the paragraph phase machine, Draft -> Paragraph -> session
-  dice.ts             dice counts, rolling, the success rule
-  rules.ts            scenario modifiers: planRoll, applyReroll
-  scoring.ts          paragraph points, tiers, the total
-  export.ts           the Markdown export
-  screens/
-    setup.ts          choose character, skill, scenario
-    play.ts           write five paragraphs
-    score.ts          the result, the breakdown, download and restart
-    fragments.ts      letterhead and scenario detail, shared by screens
-tests/                bun:test suites for every non-screen module
-wrangler.jsonc        the Worker: serve ./dist at quill.philoserf.com
+`src/main.ts` — `mount(SCENARIOS)`
+
+```ts
+try {
+  mount(SCENARIOS);
+} catch (err) {
+  // A failed boot gets a way out rather than a dead-end string. This covers
+  // mount's first render only: later renders run from event handlers, outside
+  // this try. That is safe because hydrate() has already proven the session's
+  // ids, and compile-time constants cannot stop resolving mid-session.
+  const root = document.getElementById('app');
+  if (root) {
+    root.replaceChildren();
+...
+    restart.addEventListener('click', () => {
+      // Set the letter aside, not delete it: the crash may be a shape the
+      // store's check did not anticipate, and this is the player's only copy.
+      discard();
+      location.reload();
+    });
+    root.append(msg, restart);
+  }
+  throw err;
+}
 ```
 
-The modules fall into three layers, and the dependencies point one way:
+Two details in that handler matter. The comment is precise about its reach — it guards only the first render, a scope that was stated explicitly when #76 was closed. And the recovery button calls `discard()`, which sets the stored letter aside rather than deleting it; before 6377dca (closing #78) it deleted it. The error is re-thrown afterwards so it still reaches the console.
 
-1. **Data and rules** — `types.ts`, `data.ts`, `scenarios.ts`, `dice.ts`, `rules.ts`, `scoring.ts`, `paragraph.ts`, `export.ts`. Pure functions and constants with no DOM. These are what the tests cover.
-2. **Screens** — `screens/*.ts`. Each takes a context object and returns an element. They call into the first layer but never touch storage.
-3. **The shell** — `main.ts` and `store.ts`. `main.ts` owns the one mutable `GameSession | null`, writes it through `store.ts`, and chooses which screen to render.
+`mount` finds the root element, recovers any saved session, and defines the two functions that drive the rest of the app's life:
 
-Data flows in a single loop. A screen calls a callback it was handed (`onBegin`, `onCommit`, `onRestart`); `main.ts` computes the next session, persists it, and re-renders from scratch. Anything smaller than a session change — choosing a card on the Setup screen, moving between phases of a paragraph — is handled inside the screen, which repaints its own subtree and writes nothing.
+`src/main.ts` — `mount`
 
-## Core walkthrough
+```ts
+function mount(scenarios: Scenario[]) {
+  const el = document.getElementById('app');
+  if (!el) throw new Error('Missing #app');
+  const rootEl: HTMLElement = el;
 
-### 1. Boot: hydrating the saved session
+  let session = hydrate(scenarios);
+  let warnedAboutSaving = false;
+```
 
-`main.ts` ends with a single call to `mount(SCENARIOS)`. The first thing `mount` does is decide whether there is a letter to resume. `hydrate` asks the store for a session and then checks that its three ids still name real data.
+### Hydrating a saved letter
+
+`hydrate` asks the store for whatever was saved, then checks that the session's three ids still name things that exist. The ids are all compile-time constants, so this check can only fail for a letter saved by an older deploy that has since renamed or removed a scenario, character or skill.
 
 `src/main.ts` — `hydrate`
 
@@ -75,20 +116,20 @@ function hydrate(scenarios: Scenario[]): GameSession | null {
     characterById(session.characterId) !== undefined &&
     skillById(session.skillId) !== undefined;
   if (!known) {
-    clear();
+    // Set aside, not delete: a deploy that renamed an id must not erase the
+    // letter (#100).
+    discard();
     return null;
   }
   return session;
 }
 ```
 
-Characters, skills and scenarios are compile-time constants (`src/data.ts`, `src/scenarios.ts`), so the only way an id can stop resolving is a deploy that renamed or removed one. That can only be true of a session _as loaded_, which is why the check happens once, at mount, rather than in every render. A session that fails it is cleared and the player lands on the Setup screen. Note that this is a deletion: `clear()` removes the stored letter outright, unlike the quarantine the store and the boot error handler use for letters they cannot show (steps 2 and 4).
+An unresolvable letter is set aside with `discard()` and the player starts at Setup. That is the fix for #100 (207a366); it used to delete the letter, the only rejection path that did.
 
-### 2. The store: four functions over one key
+### The store
 
-Before following `mount` further, it is worth reading `src/store.ts` in full, because everything durable passes through it. It persists a `GameSession | null` under the key `quill.session.v1` and notifies nobody: callers write, then repaint themselves.
-
-Every access goes through a guard, because in some browsers even _reading_ `localStorage` throws.
+`store.ts` is three exported functions over one key, `quill.session.v1`, plus a quarantine key beside it. Every access goes through one guard, because in some browsers merely _reading_ `localStorage` throws:
 
 `src/store.ts` — `storage`
 
@@ -102,7 +143,7 @@ function storage(): Storage | null {
 }
 ```
 
-`load` parses the stored JSON, unwraps the legacy `{ session }` shape that an earlier version wrote, and runs the result through `isSession`.
+`load` parses the stored string, unwraps a legacy `{ session }` wrapper if present, and checks the result against `isSession`. Anything that fails to parse or fails the check is quarantined rather than thrown away:
 
 `src/store.ts` — `load`
 
@@ -124,9 +165,9 @@ export function load(): GameSession | null {
 }
 ```
 
-`isSession` checks what the render path dereferences, down into each paragraph: `isParagraph` requires a numeric `inkPotIndex` and number arrays for the three rolls, with `heartRoll` allowed to be `null`. Checking the paragraph elements arrived with PR #94, which fixed issue #78: before it, a malformed paragraph passed the predicate, crashed the render, and was then destroyed by the recovery the app offered.
+`isSession` checks the five string fields, `skillSpent`, `status`, and — through `isParagraph` — each paragraph's `inkPotIndex`, roll arrays and `text`, which its comment describes as the fields the render path dereferences. `text` joined that list in 42409a2 (#106), because the render path now calls `paragraphProse(p.text)` on every committed paragraph (below); without it, a stored paragraph missing `text` passed `load` and then threw during the first render. It does not check `flourishAdjective`, nor that `inkPotIndex` is in range; the screens and export handle a missing ink-pot entry by showing a dash.
 
-Anything that fails to parse or fails the shape check is not deleted. It is moved aside.
+`quarantine` copies the raw string to `quill.session.v1.corrupt` and removes the live key. The backup is written only when the slot is empty:
 
 `src/store.ts` — `quarantine`
 
@@ -143,7 +184,7 @@ function quarantine(store: Storage, raw: string): void {
 }
 ```
 
-`CORRUPT_KEY` is `quill.session.v1.corrupt`. If the backup write fails, the `removeItem` never runs, so the original survives under its own key. `discard()` is the same quarantine applied on demand, used by the boot error handler in step 4. `save` reports refusal rather than throwing, and `clear()` is just `save(null)`.
+`discard` is the same quarantine applied to whatever is currently stored, for callers (`hydrate`, the boot handler) that have a session which loaded but cannot be shown. `save` is the only writer of the live key; it serialises a session, or removes the key for `null`, and returns `false` instead of throwing when storage refuses:
 
 `src/store.ts` — `save`
 
@@ -161,9 +202,11 @@ export function save(session: GameSession | null): boolean {
 }
 ```
 
-### 3. The session closure and screen dispatch
+So there are three ways a rejected letter leaves the live key — `load` on a bad shape, `hydrate` on an unknown id, the boot handler's button — and all three go through `quarantine`. Note what that does and does not promise. There is one backup slot, nothing in the app reads or clears it, and `removeItem(KEY)` runs whether or not the backup was written. The first rejected letter on a browser is kept; any rejected after it is deleted. Apart from that, the only path that deletes a letter is `save(null)`, the player's deliberate restart from the Score screen. If the storage calls themselves throw, the `catch` leaves the live key untouched.
 
-Back in `mount`, the hydrated session becomes a local variable, and every change to it flows through one inner function.
+### Commit and render
+
+Back in `mount`, `commit` is the single path by which the session changes. It updates the closure, persists, warns once on the console if storage refused the write, and re-renders:
 
 `src/main.ts` — `commit`
 
@@ -178,13 +221,23 @@ Back in `mount`, the hydrated session becomes a local variable, and every change
   }
 ```
 
-`commit` is the only place the session changes, and there are exactly three callers: starting a letter, committing a paragraph, and restarting. A refused write does not stop play; it warns once on the console and carries on in memory.
+The store notifies nobody; `commit` calls `render()` itself. Persisting and repainting are separate channels, which is why the play screen can repaint dozens of times per paragraph without writing to storage.
 
-`render` empties the root and picks a screen. `null` means Setup; otherwise `session.status` chooses between Play and Score. The screens are handed the resolved scenario, character and skill so they never look them up again.
+`render` empties the root and picks one of three screens. No session means Setup; otherwise `status` chooses between Play and Score:
 
 `src/main.ts` — `render`
 
 ```ts
+    // hydrate() proved all three resolve; the screens are handed the values so
+    // they never look them up again or branch on a failure that cannot happen.
+    const current = session;
+    const scenario = scenarios.find((s) => s.id === current.scenarioId);
+    const character = characterById(current.characterId);
+    const skill = skillById(current.skillId);
+    if (!scenario || !character || !skill) {
+      throw new Error(`Session ${current.id} references data that no longer exists`);
+    }
+
     if (current.status === 'in_progress') {
       rootEl.appendChild(
         renderPlay({
@@ -195,53 +248,32 @@ Back in `mount`, the hydrated session becomes a local variable, and every change
           onCommit: (paragraph) => commit(commitParagraph(current, paragraph)),
         }),
       );
-    } else {
-      rootEl.appendChild(
-        renderScore({
-          session: current,
-          scenario,
-          character,
-          skill,
-          onRestart: () => commit(null),
-        }),
-      );
-    }
 ```
 
-A few lines above this, `render` re-resolves the three ids and throws if any is missing. After `hydrate` that cannot happen; the throw exists so the types narrow without a non-null assertion.
+The `throw` exists for the type checker: `hydrate` has already proven all three lookups succeed, and the data is constant, so in practice it cannot fire. The screens receive resolved objects, not ids.
 
-### 4. When boot fails
+## The Setup screen
 
-The call to `mount` is wrapped so a crash on first render leaves the player a way out instead of a blank page.
+With no session, `render` builds the Setup screen and passes an `onBegin` callback that creates a fresh session:
 
-`src/main.ts` — `mount(SCENARIOS)`
+`src/main.ts` — `newSession`
 
 ```ts
-try {
-  mount(SCENARIOS);
-} catch (err) {
-...
-    restart.addEventListener('click', () => {
-      // Set the letter aside, not delete it: the crash may be a shape the
-      // store's check did not anticipate, and this is the player's only copy.
-      discard();
-      location.reload();
-    });
-    root.append(msg, restart);
-  }
-  throw err;
-}
+  return {
+    id: crypto.randomUUID(),
+    startedAt: new Date().toISOString(),
+    characterId: sel.characterId,
+    skillId: sel.skillId,
+    scenarioId: sel.scenarioId,
+    skillSpent: false,
+    paragraphs: [],
+    status: 'in_progress',
+  };
 ```
 
-The button calls `discard()`, not `clear()`; that change is the second half of PR #94. The same PR settled issue #76, which observed that this `try` covers only `mount`'s first render: later renders run from event handlers, outside it. The comment in the `catch` records why that is acceptable — `hydrate` has already proven the ids, and compile-time constants cannot stop resolving mid-session.
+`renderSetup` keeps a three-field selection in its own closure and rebuilds the whole screen on every choice. The steps reveal progressively — the skill step appears once a character is chosen, the scenario step once a skill is, and the _Begin the letter_ button once a scenario is. Because a rebuild destroys the focused card, each selection records which card to refocus:
 
-### 5. The Setup screen
-
-With no session, `render` calls `renderSetup`. The screen keeps its three selections in a local `SetupState` and rebuilds itself on every choice. Each later step appears only once the previous one is chosen: skills after a character, scenarios after a skill, and the _Begin the letter_ button after a scenario. That button calls `ctx.onBegin`, which `main.ts` turns into `commit(newSession(sel))` — a fresh `GameSession` with a random UUID, an ISO `startedAt`, no paragraphs, and `status: 'in_progress'`.
-
-Because every selection rebuilds the whole screen, the focused card is destroyed each time. `choose` records which card should have focus and `render` restores it at the end.
-
-`src/screens/setup.ts` — `choose`
+`src/screens/setup.ts` — `renderSetup`
 
 ```ts
   function choose(kind: string, apply: (id: string) => void) {
@@ -253,27 +285,77 @@ Because every selection rebuilds the whole screen, the focused card is destroyed
   }
 ```
 
-The three steps are one function, `renderChoiceStep`, called with a different noun. Each card grid is an ARIA `radiogroup` with a roving tabindex: one tab stop per group, arrows to move, Home and End for the ends. As the radio pattern requires, moving also selects.
+All three steps are one generic builder, `renderChoiceStep`, parameterised by how to name and describe an item. It renders a `radiogroup` of `<button role="radio">` cards with a roving tabindex — the group is one tab stop, and the arrow keys move _and select_ within it, wrapping at the ends:
 
 `src/screens/setup.ts` — `renderChoiceStep`
 
 ```ts
+  grid.addEventListener('keydown', (event) => {
+    const from = cards.indexOf(document.activeElement as HTMLButtonElement);
+    if (from === -1) return;
+    const last = cards.length - 1;
+    let to: number;
+    switch (event.key) {
+      case 'ArrowRight':
+      case 'ArrowDown':
+        to = from === last ? 0 : from + 1;
+        break;
+...
     event.preventDefault();
     // The radio pattern selects as it moves; `onSelect` re-renders, and
     // `renderSetup` restores focus to the card that was chosen.
     const target = opts.items[to];
     if (target) opts.onSelect(target);
+  });
 ```
 
-The character cards also show attribute pips. `renderAttributePips` fills one pip per die, using the same `diceForRating` the rules use, so the pips are literally the dice count: poor is one die, average two, good three.
+Character cards carry an extra block of attribute pips (`renderAttributePips`), drawn with `diceForRating` so a _good_ rating shows three filled pips — the same number of dice it rolls. Once a scenario is selected, its profile and rules of correspondence appear below the cards through `renderScenarioDetail` in `fragments.ts`, which the play screen reuses for its recall panel.
 
-### 6. The Play screen and its draft
+The content on these cards is constant data. A character is a name, flavour text and three attribute ratings; a skill names the one attribute it boosts:
 
-With a session in progress, `render` calls `renderPlay`. This screen owns the paragraph being written — the _draft_ — in its own closure. The draft is deliberately not persisted; only completed paragraphs reach the session.
+`src/types.ts` — `Character`
+
+```ts
+export interface Character {
+  id: string;
+  name: string;
+  flavor: string[];
+  attributes: Record<Attribute, Rating>;
+}
+```
+
+A scenario carries its rules as a list of `Modifier`s, its ink pot as ten inferior/superior word pairs, and one consequence string per tier:
+
+`src/types.ts` — `Scenario`
+
+```ts
+export interface Scenario {
+  id: string;
+  title: string;
+  profile: string[];
+  rulesOfCorrespondence: Modifier[];
+  inkPot: InkPotEntry[];
+  consequences: Record<TierName, string>;
+}
+```
+
+Clicking _Begin the letter_ calls `onBegin`, which `commit`s the new session. `render` runs again, finds an in-progress session, and builds the play screen.
+
+## The Play screen
+
+### The screen's own state
+
+`renderPlay` is called once per paragraph. It creates a `PlayView` — the context from `main.ts` plus a mutable `state` object and a `repaint` function — and paints:
 
 `src/screens/play.ts` — `renderPlay`
 
 ```ts
+export function renderPlay(ctx: PlayCtx): HTMLElement {
+  const root = document.createElement('section');
+  root.className = 'screen screen--play';
+
+  // Owned by this invocation. A new letter means a new renderPlay call means a
+  // fresh draft, so there is no session-change detection to get wrong.
   const v: PlayView = {
     ...ctx,
     state: { draft: emptyDraft(), recallOpen: false },
@@ -288,13 +370,30 @@ With a session in progress, `render` calls `renderPlay`. This screen owns the pa
   }
 ```
 
-`v` is passed to every render function below. `state` is a single shared object rather than separate variables, so a handler that fires after a repaint reads the current draft instead of the one it captured when it was built; step 9 shows the handler that depends on this.
+`repaint` rebuilds everything inside the play section: a header with five Roman-numeral medallions, then three columns — the Ink Pot card, the letter itself, and the marginalia (the current step's controls plus a reference card). Every handler on the screen follows the same two-beat pattern: update `v.state.draft`, then call `v.repaint()`. None of it is saved; the draft lives only in this closure.
 
-The screen has three columns. The ink pot card on the left lists the scenario's words, marks those already used, and is the only control during `PICK_WORD`. The letter in the middle shows committed paragraphs and a slot for the draft. The marginalia on the right holds the stepper and the controls for the current phase, plus a reference card with the character, the skill's spent state, the running score, and a toggle to recall the scenario text.
+`state` is one shared object rather than values captured per render on purpose. A handler that fires _after_ a repaint — the roll button's delayed callback, below — reads `v.state.draft` at that moment and so sees the current draft, not a stale copy.
 
-### 7. The paragraph machine
+### The paragraph machine
 
-Every control on the Play screen moves the draft by calling one function. `src/paragraph.ts` defines seven phases and one event-keyed transition.
+The order a paragraph moves through lives in `src/paragraph.ts`, not in the screen. A `Draft` is the in-progress paragraph:
+
+`src/paragraph.ts` — `Draft`
+
+```ts
+export interface Draft {
+  phase: PhaseName;
+  inkPotIndex: number | null;
+  flourishAdjective: string;
+  heartRoll: number[] | null;
+  languageRoll: number[] | null;
+  penmanshipRoll: number[] | null;
+  text: string;
+  skillUsedHere: Attribute | null;
+}
+```
+
+and `advance` is the transition function. Each event is legal in exactly one phase; any other combination returns the draft unchanged:
 
 `src/paragraph.ts` — `advance`
 
@@ -312,32 +411,77 @@ export function advance(draft: Draft, event: DraftEvent): Draft {
     case 'writePlainly':
       if (draft.phase !== 'DECIDE_FLOURISH') return draft;
       return { ...draft, flourishAdjective: '', phase: 'ROLL_LANGUAGE' };
-
-    case 'finishParagraph':
-      if (draft.phase !== 'WRITE') return draft;
-      return { ...draft, phase: 'ROLL_PENMANSHIP' };
-...
 ```
 
-The order of a paragraph is:
+`DECIDE_FLOURISH` is the one branch: attempting a flourish goes through `ROLL_HEART`, writing plainly skips straight to `ROLL_LANGUAGE`. The three `rolled` events record their dice and advance — Heart to Language, Language to `WRITE`, Penmanship to `PARAGRAPH_DONE`. Heart and Language are rolled _before_ the player writes, because their results decide which word (and whether the flourish) must appear in the text; Penmanship is rolled after.
 
-1. `PICK_WORD` — choose an ink pot entry.
-2. `DECIDE_FLOURISH` — type an adjective and attempt it, or write plainly. This is the only branch: attempting goes to `ROLL_HEART`, writing plainly clears the adjective and skips straight to `ROLL_LANGUAGE`.
-3. `ROLL_HEART` — does the flourish hold?
-4. `ROLL_LANGUAGE` — superior or inferior word?
-5. `WRITE` — the player writes the paragraph.
-6. `ROLL_PENMANSHIP` — fine hand or plain?
-7. `PARAGRAPH_DONE` — show the points and commit.
+Here is the machine driven through a full paragraph, including one out-of-order event. This is a transcript of a throwaway script run with `bun` against the current source while writing this document; nothing re-runs it.
 
-Heart and Language resolve _before_ writing, so the player knows exactly which word and flourish to use; Penmanship resolves after. Each event carries the data its transition records — `rolled` carries the dice, `pickWord` the index — so the order and the data flow live in one place. An event that does not belong to the current phase returns the draft unchanged; the UI never offers one, and ignoring it is safer than throwing in a click handler.
+```text
+emptyDraft()                                 -> PICK_WORD
+rolled heart (out of order: ignored)         -> PICK_WORD
+pickWord 1                                   -> DECIDE_FLOURISH
+attemptFlourish                              -> ROLL_HEART
+rolled heart [2,5]                           -> ROLL_LANGUAGE
+rolled language [6,1]                        -> WRITE
+finishParagraph                              -> ROLL_PENMANSHIP
+rolled penmanship [3,4,1]                    -> PARAGRAPH_DONE
+paragraphPoints = 2
+```
 
-A presentation table, `STEP_INDEX`, maps phases to the five stepper labels (`Word`, `Flourish`, `Language`, `Write`, `Hand`). `DECIDE_FLOURISH` and `ROLL_HEART` share a column.
+`advance` owns the phase and the three rolls, but not every field of the draft. Three fields are written by the screen directly, outside any event: `flourishAdjective` and `text` on every keystroke, and `skillUsedHere` when the player spends the skill. Keep both channels in mind when reading the handlers below.
 
-The flourish step shows how a screen drives the machine: the button handler calls `advance` with the event, stores the result, and repaints.
+The stepper across the top of the marginalia maps phases to five columns through `STEP_INDEX`, a presentation table in the same file; `DECIDE_FLOURISH` and `ROLL_HEART` share the _Flourish_ column.
+
+### Picking a word
+
+In `PICK_WORD`, every unused ink-pot entry is a live button. A word already used by a committed paragraph shows which side of the pair it became; the word chosen for the current draft is marked:
+
+`src/screens/play.ts` — `renderInkPotCard`
+
+```ts
+  v.scenario.inkPot.forEach((entry, idx) => {
+    const used = v.session.paragraphs.find((p) => p.inkPotIndex === idx);
+    const chosen = !used && v.state.draft.inkPotIndex === idx;
+    const pickable = v.state.draft.phase === 'PICK_WORD' && !used;
+...
+    if (pickable) {
+      btn.addEventListener('click', () => {
+        v.state.draft = advance(v.state.draft, { type: 'pickWord', inkPotIndex: idx });
+        v.repaint();
+      });
+    }
+```
+
+The draft records the word's _position_, `inkPotIndex`, not the word. That position is what ends up in storage, and it is resolved against `SCENARIOS` every time the letter is displayed — including after a deploy. The type carries the warning that follows from this (added by 80bbd9b, closing #79):
+
+`src/types.ts` — `Paragraph`
+
+```ts
+export interface Paragraph {
+  // A position in the scenario's inkPot, resolved at render and export time
+  // against whatever SCENARIOS holds then. Saved sessions outlive deploys, so
+  // an existing scenario's inkPot is append-only: reordering, removing or
+  // repurposing an entry silently changes the word in every stored letter.
+  inkPotIndex: number;
+```
+
+### Deciding on a flourish
+
+`renderStepFlourish` offers a text input and two buttons. Typing writes straight into the draft; _Attempt it_ refuses an empty or whitespace-only adjective by refocusing the input; _Write plainly_ fires `writePlainly`, which also clears whatever was typed:
 
 `src/screens/play.ts` — `renderStepFlourish`
 
 ```ts
+  input.addEventListener('input', () => {
+    v.state.draft.flourishAdjective = input.value;
+  });
+  wrap.appendChild(input);
+
+  const attempt = document.createElement('button');
+  attempt.type = 'button';
+  attempt.className = 'btn btn--primary';
+  attempt.textContent = 'Attempt it';
   attempt.addEventListener('click', () => {
     if (!v.state.draft.flourishAdjective.trim()) {
       input.focus();
@@ -348,21 +492,11 @@ The flourish step shows how a screen drives the machine: the button handler call
   });
 ```
 
-Two `switch` statements on the phase render the screen: `renderLetterDraftSlot` for the middle column and `renderMarginaliaStepCard` for the controls. Both end in a `never`-typed `default`, so a new `PhaseName` that neither handles is a compile error rather than a phase that renders nothing. That was issue #75, fixed by PR #97.
+The blank-adjective guard lives only in this click handler: `attemptFlourish` carries no payload, and `advance` moves any `DECIDE_FLOURISH` draft to `ROLL_HEART` whatever its adjective. It matters because scoring decides whether a flourish counted from `heartRoll`, while the Score screen's breakdown decides whether to mention one from `flourishAdjective`; the handler is what keeps those two in step. The check also trims, but what is stored is the untrimmed input. That matters later, in the write step.
 
-`src/screens/play.ts` — `renderMarginaliaStepCard`
+### Rolling
 
-```ts
-    default: {
-      // Compile-time exhaustiveness: a new PhaseName must be rendered here.
-      const _exhaustive: never = v.state.draft.phase;
-      throw new Error(`Unhandled phase: ${String(_exhaustive)}`);
-    }
-```
-
-### 8. Planning a roll
-
-The three roll phases share `renderRollStep`. It works out whether the skill can apply, asks the rules how many dice to roll, offers the skill if it is unspent, and wires the roll button.
+All three rolls share one builder, `renderRollStep`. It works out whether the skill can be spent on this roll, asks `rules.ts` how many dice to throw, and renders the info line, an optional _Spend skill_ button, and the roll button:
 
 `src/screens/play.ts` — `renderRollStep`
 
@@ -378,9 +512,9 @@ The three roll phases share `renderRollStep`. It works out whether the skill can
   });
 ```
 
-A skill is available when it has not been spent on an earlier paragraph and its `bonusAttribute` matches the roll. Pressing _Spend_ sets `draft.skillUsedHere` and repaints, which re-plans the roll with the extra die. The session's `skillSpent` flag does not flip until the paragraph is committed; until then the reference card reads the draft's `skillUsedHere` to show the skill as spent.
+`skillAvailableFor` is true when the session has not yet spent its skill and the skill boosts this attribute. Pressing _Spend_ sets `v.state.draft.skillUsedHere` and repaints; the next render sees `skillBonusActive` and asks for one more die. The session's `skillSpent` flag does not flip until the paragraph is committed, which is why the reference card computes "spent" from both `v.session.skillSpent` and the draft.
 
-`planRoll` starts from the character's rating and folds in the scenario's rules of correspondence.
+`planRoll` starts from the character's rating and walks the scenario's modifiers:
 
 `src/rules.ts` — `planRoll`
 
@@ -405,11 +539,19 @@ A skill is available when it has not been spent on an earlier paragraph and its 
       }
 ```
 
-There are two kinds of modifier. A `dice_bonus` adds dice, optionally only for listed characters: The Archduke gives Courtiers and Aristocrats an extra Heart die and gives everyone an extra Penmanship die. A `reroll_highest` sets a policy instead: The Art Dealer re-rolls the highest Penmanship die. The skill's bonus, if active, adds one more die at the end. The `switch` ends in a `never`-typed `default` as well. Its runtime comment speaks of "a payload that escaped validation (e.g., tampered session)", but modifiers come only from the `SCENARIOS` constant and never from storage, so a tampered session cannot reach this branch; the comment overstates what the throw guards.
+A rating is worth one, two or three dice:
 
-### 9. Rolling
+`src/dice.ts` — `diceForRating`
 
-The roll button does not roll at once. It shakes for 250ms first, and the delay creates a window in which the screen may repaint.
+```ts
+export function diceForRating(r: Rating): number {
+  return r === 'poor' ? 1 : r === 'average' ? 2 : 3;
+}
+```
+
+A `dice_bonus` modifier adds dice, and may be limited to certain characters — The Archduke gives Courtiers and Aristocrats an extra Heart die, for example. A `reroll_highest` modifier (The Art Dealer, on Penmanship) does not change the count; it sets a policy. The `switch` ends in a `never`-typed default, so adding a `Modifier` variant without a branch is a compile error. Its runtime `throw` is reachable only if a cast defeats that check — modifiers come from the compiled `SCENARIOS`, never from storage; ee642b8 (closing #102) reworded the comment to say so. Finally, a spent skill adds one die.
+
+The roll button runs through `attachRollButton`, which shakes it for 250 ms before rolling:
 
 `src/screens/play.ts` — `attachRollButton`
 
@@ -430,38 +572,43 @@ function attachRollButton(btn: HTMLButtonElement, onRoll: () => void): void {
 }
 ```
 
-If the button is still attached, `onRoll` runs. In `renderRollStep` that is `onRolled(applyReroll(roll(plan.diceCount), plan.rerollPolicy))` followed by a repaint, and each roll step's `onRolled` sends a `rolled` event through `advance`. Because it assigns to `v.state.draft` at the moment it fires, it always lands on the live draft. The recall toggle on the reference card flips its panel in place, without `repaint`, for exactly this reason: a repaint would detach a shaking button and silently cancel its roll.
+The `isConnected` check is what makes the delay safe. The _Spend_ button stays clickable during the shake, and spending repaints; the old roll button, holding a plan computed without the extra die, is then detached and silently does nothing. The recall toggle on the reference card flips its panel's `hidden` attribute in place rather than repainting, precisely so it cannot cancel a roll this way.
 
-The dice themselves are plain d6s. `applyReroll` carries out the Art Dealer's policy.
+When the roll does fire, it throws `plan.diceCount` dice, applies the re-roll policy, and hands the result to the step's callback, which dispatches the `rolled` event:
+
+`src/screens/play.ts` — `renderRollStep`
+
+```ts
+  attachRollButton(rollBtn, () => {
+    onRolled(applyReroll(roll(plan.diceCount), plan.rerollPolicy));
+    v.repaint();
+  });
+```
+
+`roll` is `Math.floor(rng() * 6) + 1` per die, with the random source injectable for tests. `applyReroll` carries out the Art Dealer's rule, and it is a hazard rather than a bonus — the highest die is replaced whether or not it was already a success:
 
 `src/rules.ts` — `applyReroll`
 
 ```ts
+export function applyReroll(
+  dice: number[],
+  policy: RollPlan['rerollPolicy'],
+  rng?: () => number,
+): number[] {
   if (policy !== 'highest' || dice.length === 0) return dice;
   const i = dice.indexOf(Math.max(...dice));
   // roll(1) always yields one die; the fallback is for the type, not for a
   // reachable case — see the test that pins it.
   const replacement = roll(1, rng)[0] ?? 1;
   return [...dice.slice(0, i), replacement, ...dice.slice(i + 1)];
-```
-
-The highest die is replaced unconditionally, even when it was already a success. That makes the rule a hazard, as the rulebook intends ("re-roll the highest die and accept the final roll"), not a second chance.
-
-Whether a roll succeeded is decided in one place.
-
-`src/dice.ts` — `succeeded`
-
-```ts
-export function succeeded(dice: number[] | null): boolean {
-  return dice !== null && countSuccesses(dice) > 0;
 }
 ```
 
-A die succeeds on 5 or 6, and a roll succeeds if any die does. `succeeded` accepts `null` because a Heart roll that never happened — the player wrote plainly — did not succeed. Every success verdict in the app, from the play screen's messages to scoring and export, comes from this one function; only the per-die highlight in `renderDiceRow` calls `isSuccess` directly.
+Each subsequent step shows the previous roll's verdict above its own controls: the Language step reports whether the flourish held, and the Penmanship step reports whether the superior word was drawn.
 
-### 10. Writing
+### Writing
 
-In `WRITE`, the middle column becomes a textarea. `renderWriteSlot` works out the phrase the paragraph must include from the two rolls already made.
+After the Language roll the draft is in `WRITE`, and the letter column shows a textarea. `renderWriteSlot` works out the exact phrase the paragraph must contain — the superior or inferior word, prefixed with the flourish if the Heart roll held — and keeps a live indicator of whether the text contains it:
 
 `src/screens/play.ts` — `renderWriteSlot`
 
@@ -475,13 +622,17 @@ In `WRITE`, the middle column becomes a textarea. `renderWriteSlot` works out th
   const requiredLower = required.toLowerCase();
 ```
 
-The textarea writes straight into `v.state.draft.text` on every `input` event without repainting, so focus and cursor survive typing. A case-insensitive substring check updates a hint line saying whether the phrase is on the page. That hint is advisory: _Finish paragraph_ is always enabled, and nothing requires the phrase or any text at all. An empty paragraph can be committed and is shown as `EMPTY_PARAGRAPH`, `(empty paragraph)`. The screens test `p.text || EMPTY_PARAGRAPH` while the export tests `p.text.trim() || EMPTY_PARAGRAPH`, so a paragraph of only whitespace shows the placeholder in the export but a blank paragraph on screen.
+The indicator is advisory: _Finish paragraph_ fires `finishParagraph` whatever the text says, and an empty paragraph is allowed. Because `flourishAdjective` is the untrimmed input, a flourish typed with a trailing space (`"solemn "`) makes the required phrase `"solemn  Passing"`, with two spaces, which ordinary prose never matches — the indicator stays on "not yet set down" though the player wrote the phrase. The same string logic, run in the throwaway script:
 
-`renderWriteSlot` begins, as `renderRollPenmanshipStep` and `renderStepDone` do, by checking that the ink pot index and language roll exist and returning an `internalError` element if not. The phase order guarantees both by the time these phases render, so these branches cannot be reached through the UI; they exist to narrow the `Draft`'s nullable fields under `noUncheckedIndexedAccess`.
+```text
+flourish "solemn " -> required "solemn  passing" matches "a solemn passing": false
+```
 
-### 11. Committing a paragraph
+Since the indicator blocks nothing, the cost is a misleading hint, not a lost paragraph.
 
-After the Penmanship roll the draft reaches `PARAGRAPH_DONE`. The done step needs a `Paragraph` twice — to preview the points and then to commit — and both come from one mapping.
+### The paragraph done, and the commit
+
+After the Penmanship roll, `PARAGRAPH_DONE` shows a summary and the commit button. Both the summary and the commit go through one mapping from draft to stored paragraph, so the points the player previews are the points recorded:
 
 `src/paragraph.ts` — `draftToParagraph`
 
@@ -500,22 +651,21 @@ export function draftToParagraph(d: Draft): Paragraph | null {
 }
 ```
 
-A `Paragraph` stores the word's _position_ in the ink pot, not the word.
+`text` is not required, and a blank flourish becomes `null`. The button hands the paragraph to `onCommit`:
 
-`src/types.ts` — `Paragraph`
+`src/screens/play.ts` — `renderStepDone`
 
 ```ts
-export interface Paragraph {
-  // A position in the scenario's inkPot, resolved at render and export time
-  // against whatever SCENARIOS holds then. Saved sessions outlive deploys, so
-  // an existing scenario's inkPot is append-only: reordering, removing or
-  // repurposing an entry silently changes the word in every stored letter.
-  inkPotIndex: number;
+  next.addEventListener('click', () => {
+    const newPara = draftToParagraph(v.state.draft);
+    if (!newPara) return;
+    // Committing replaces the whole screen with a fresh renderPlay, discarding
+    // this closure and its draft — there is no reset to sequence.
+    v.onCommit(newPara);
+  });
 ```
 
-Saved letters outlive deploys, so editing a scenario's ink pot rewrites history for anyone mid-letter. That invariant was issue #79; PR #98 wrote it onto the field itself and into `CLAUDE.md`. No test enforces it.
-
-The _Next paragraph_ button (_Seal & finish the letter_ on the fifth) calls `v.onCommit`, which in `main.ts` is `commit(commitParagraph(current, paragraph))`.
+In `main.ts`, `onCommit` is `commit(commitParagraph(current, paragraph))`. `commitParagraph` appends the paragraph, folds its skill use into `skillSpent`, and finishes the letter on the fifth:
 
 `src/paragraph.ts` — `commitParagraph`
 
@@ -531,11 +681,35 @@ export function commitParagraph(session: GameSession, para: Paragraph): GameSess
 }
 ```
 
-This is where the skill is finally marked spent and where the fifth paragraph flips the status to `'finished'` — the only route to the Score screen. `commit` saves the new session and calls `render`, which builds a brand-new `renderPlay` with a fresh empty draft. Nothing resets the old draft; its closure is simply dropped. The ink pot card disables every entry whose index already appears in `session.paragraphs`, so each word serves one paragraph.
+`commit` saves the new session and calls `render`, which builds a brand-new `renderPlay` with a fresh `emptyDraft()` — or, after the fifth paragraph, the Score screen. A draft abandoned mid-paragraph (by reloading the page) is simply lost; only committed paragraphs are durable.
 
-### 12. Scoring
+Committed paragraphs are shown in the letter column through one rule shared with the Score screen and the export:
 
-Points per paragraph depend on whether the flourish held, whether the word came out superior, and whether the hand was fine.
+`src/paragraph.ts` — `paragraphProse`
+
+```ts
+export function paragraphProse(text: string): string {
+  return text.trim() || EMPTY_PARAGRAPH;
+}
+```
+
+Whitespace-only text counts as empty and shows _(empty paragraph)_. Before 21aa5a0 (closing #101) the screens tested only for the literal empty string, so a paragraph of spaces exported as the placeholder but showed as a blank on screen.
+
+The play screen has two `switch`es over the phase — what goes in the letter's draft slot, and what goes in the step card — and both end in a `never`-typed default, so a new phase that neither renders is a compile error (29b8da3, closing #75). The `internalError` returns scattered through the step renderers cover draft fields that `advance` guarantees are set by the time their phase is reached; no sequence of events through `advance` reaches them.
+
+## Scoring
+
+Points are computed from the stored rolls whenever they are needed — on the play screen's reference card, in the done summary, on the Score screen and in the export. Nothing caches them. The one success rule is that any die showing 5 or 6 succeeds, and a roll that never happened did not:
+
+`src/dice.ts` — `succeeded`
+
+```ts
+export function succeeded(dice: number[] | null): boolean {
+  return dice !== null && countSuccesses(dice) > 0;
+}
+```
+
+`paragraphPoints` combines the Heart and Language outcomes, then adds a point for a fine hand:
 
 `src/scoring.ts` — `paragraphPoints`
 
@@ -555,26 +729,19 @@ export function paragraphPoints(p: Paragraph): number {
 }
 ```
 
-A flourish that holds doubles the reward for a superior word and costs a point on an inferior one; a flourish that fails changes nothing. This is a transcript of a script run while writing this document, which called `paragraphPoints` and `tierFor` from `src/scoring.ts` with a single die of 6 for success and 2 for failure. It is not live; nothing re-runs it.
+A flourish that holds is a gamble on the Language roll: it doubles a superior word's value and turns an inferior one into a penalty. A flourish whose Heart roll _fails_ scores exactly as if the player had written plainly. The table, as printed by the same throwaway script (Penmanship failing throughout; a success adds one to every row):
 
 ```text
-heart      language  penmanship  points
-not rolled fail      fail        0
-not rolled fail      success     1
-not rolled success   fail        1
-not rolled success   success     2
-fail       fail      fail        0
-fail       fail      success     1
-fail       success   fail        1
-fail       success   success     2
-success    fail      fail        -1
-success    fail      success     0
-success    success   fail        2
-success    success   success     3
--2→unsuccessful  0→unsuccessful  4→unsuccessful  5→tepid  7→tepid  8→favourable  10→favourable  11→excellent  15→excellent
+heart  language  points (penmanship fails)
+null   [1]       0
+null   [5]       1
+[1]    [1]       0
+[1]    [5]       1
+[5]    [1]       -1
+[5]    [5]       2
 ```
 
-A letter therefore scores between -5 and 15. The total maps to a tier through one table.
+The five paragraph scores sum to a total, and `tierFor` walks `TIERS` from the top, taking the first threshold the total clears:
 
 `src/types.ts` — `TIERS`
 
@@ -587,40 +754,62 @@ export const TIERS = [
 ] as const;
 ```
 
-`TierName` is derived from this table, and `Scenario.consequences` is a `Record<TierName, string>`, so each scenario supplies exactly four consequence strings and cannot move the boundaries. `tierFor` returns the first tier whose threshold the total clears, and falls back to `LOWEST_TIER` for a negative total. `score(session)` maps `paragraphPoints` over the paragraphs and returns the per-paragraph points, the total and the tier.
+`TierName` is derived from this table, and `Scenario.consequences` is keyed by it, so every scenario must supply exactly these four consequences and none can move a boundary. A negative total clears no threshold and falls through to the lowest tier:
 
-### 13. The Score screen
+```text
+tierFor: -3=unsuccessful 0=unsuccessful 4=unsuccessful 5=tepid 7=tepid 8=favourable 10=favourable 11=excellent 15=excellent
+```
 
-When `status` is `'finished'`, `render` calls `renderScore`. It shows a seal with the total, the tier ("An excellent letter"), the scenario's consequence for that tier, the finished letter signed with the character's name, and a breakdown table built from the same `score` result. The breakdown reports a failed flourish as "flourish lost".
+## The Score screen
 
-Two actions close the screen. _Write another letter_ is `onRestart`, which `main.ts` turns into `commit(null)`: the session is removed from storage and the Setup screen renders. _Download letter (.md)_ builds the Markdown and hands it to the browser.
+When the fifth paragraph commits, `status` becomes `'finished'` and `render` builds `renderScore`. It calls `score(session)` once and lays out a seal with the total, the tier ("A tepid letter", "An excellent letter"), and the scenario's consequence for that tier; then the finished letter on a letterhead, signed with the character's name; then a paragraph-by-paragraph breakdown:
 
 `src/screens/score.ts` — `renderScore`
 
 ```ts
-  download.addEventListener('click', () => {
-    const md = toMarkdown(ctx.session, ctx.scenario, ctx.character, ctx.skill);
-    const blob = new Blob([md], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const d = ctx.session.startedAt.slice(0, 10);
-    a.href = url;
-    a.download = `quill-${d}-${ctx.scenario.id}.md`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    // The blob fetch is scheduled after the current task, so revoking inline
-    // races it — Safari and older Firefox have produced cancelled or zero-byte
-    // downloads. One turn of the event loop is enough.
-    setTimeout(() => URL.revokeObjectURL(url), 0);
-  });
+  for (const [i, p] of ctx.session.paragraphs.entries()) {
+    const pair = ctx.scenario.inkPot[p.inkPotIndex];
+    const sup = succeeded(p.languageRoll);
+    const flourish = p.flourishAdjective;
+    let word = pair
+      ? `"${sup ? pair.superior : pair.inferior}" (${sup ? 'superior' : 'inferior'})`
+      : '—';
+    if (flourish !== null) {
+      word += succeeded(p.heartRoll) ? ` + "${flourish}"` : ' — flourish lost';
+    }
 ```
 
-The filename's date is the UTC date from `startedAt`. The letterhead, by contrast, formats `startedAt` in local time (`formatOrdinalDate` in `src/screens/fragments.ts`), so it reads as the player's calendar day.
+The breakdown names a failed flourish as lost; the export, below, omits a failed flourish entirely. Both score it the same way.
 
-### 14. The Markdown export
+The letterhead's date comes from `renderLetterhead` in `fragments.ts`, which formats `startedAt` in _local_ time ("Written this 12th day of October"), while the export's date and filename take the first ten characters of the ISO string, which is UTC. Near midnight the two can name different days; the comment on `formatOrdinalDate` says this is intended.
 
-`toMarkdown` assembles three parts: YAML frontmatter, the paragraphs as prose, and a game-record table with the consequence quoted at the end. Player text reaches the table cells unmodified, so every cell goes through an escape.
+Two buttons close the screen. _Write another letter_ is `onRestart`, which `main.ts` wires to `commit(null)` — `save(null)` removes the stored letter, and `render` returns to Setup. This is the one place a letter is deliberately deleted. _Download letter (.md)_ builds the export.
+
+## The export
+
+The download handler calls `toMarkdown`, wraps the string in a `Blob`, clicks a temporary link named `quill-<date>-<scenario id>.md`, and revokes the object URL one tick later rather than inline, because revoking synchronously raced the download in some browsers.
+
+`toMarkdown` assembles three parts: YAML frontmatter, the letter's prose, and a game-record table with the total and consequence:
+
+`src/export.ts` — `toMarkdown`
+
+```ts
+  const frontmatter = [
+    '---',
+    `date: ${date}`,
+    `character: ${character.name}`,
+    `skill: ${skill.name}`,
+    `scenario: ${yamlScalar(scenario.title)}`,
+    `score: ${result.total}`,
+    `consequence: ${result.tierName}`,
+    '---',
+    '',
+  ].join('\n');
+
+  const body = session.paragraphs.map((p) => paragraphProse(p.text)).join('\n\n');
+```
+
+The prose goes through `paragraphProse`, the same rule the screens use. The table is where player text meets Markdown syntax, so each cell of player text is escaped:
 
 `src/export.ts` — `escapeCell`
 
@@ -630,57 +819,12 @@ function escapeCell(text: string): string {
 }
 ```
 
-Backslashes are escaped before pipes; otherwise a typed `\|` would become an escaped backslash followed by a bare pipe that splits the cell. That ordering was issue #84, fixed by PR #95. Newlines become spaces so a pasted line break cannot end the table early. The scenario title in the frontmatter goes through `yamlScalar`, which quotes it so a future title with a colon cannot break the YAML.
+The order matters: backslashes are doubled first, so a typed `\|` becomes `\\\|` — an escaped backslash followed by an escaped pipe — instead of an escaped backslash followed by a bare pipe that splits the cell. That ordering is the fix for #84 (b87045c).
 
-As in the Score screen's breakdown, the export shows a flourish only if it held, and shows `—` for a roll that was never made. This is a transcript of `toMarkdown` run on a hand-built two-paragraph session for The Archduke; a real export always has five rows.
+`paragraphRow` builds one table row per paragraph: the word with its tier (superior or inferior, or a dash if the index no longer resolves), the flourish only if it held, the three rolls as comma-separated dice, and the points. `yamlScalar` quotes the scenario title in the frontmatter so a future title with a colon cannot break the YAML; the four bundled titles do not need it.
 
-```markdown
----
-date: 2026-10-12
-character: The Monk
-skill: Illumination
-scenario: "The Archduke"
-score: 3
-consequence: unsuccessful
----
+## Tests, build and deploy
 
-I write to you on the untimely Passing of your sister.
+`tests/` has a file for each non-screen module — `data`, `dice`, `export`, `paragraph`, `rules`, `scenarios`, `scoring` and `store` — with `helpers.ts` beside them. The store tests run against an in-memory `Storage` stand-in, including storage that throws on access and storage that refuses writes. `tests/scenarios.test.ts` checks what the `Scenario` type cannot: every ink pot holds at least five words, `dice_bonus` amounts are positive integers, and `appliesTo` names real characters. The screens have no automated tests; the README's six-step manual smoke test covers them.
 
-We spent | our summers Climbing Trees.
-
----
-
-## Game record
-
-| # | Word | Flourish | Heart | Language | Penmanship | Points |
-| --- | --- | --- | --- | --- | --- | --- |
-| 1 | Passing (superior) | untimely | 5 | 3,6 | 2,4,5,1 | 3 |
-| 2 | Climbing Trees (inferior) | — | — | 1,2 | 3,4,2 | 0 |
-
-**Total**: 3 / unsuccessful
-
-> The Archduke is disgusted by your letter. You have lost his respect and will no longer be in contact with you.
-```
-
-The pipe in the second paragraph's prose is left alone — escaping applies only to table cells.
-
-### 15. Build and deploy
-
-The loop ends where the page began. `bun build` bundles from `public/index.html`, following its `<script>` to `src/main.ts`, and writes hashed assets to `dist/`.
-
-`package.json` — `build`
-
-```json
-    "build": "rm -rf dist && bun build ./public/index.html --outdir dist",
-```
-
-`bun build` never cleans its output directory, so the script deletes `dist/` first; otherwise every old hashed bundle would ship beside the current one. The Worker serves that directory and nothing else.
-
-`wrangler.jsonc` — `assets`
-
-```jsonc
-  "assets": { "directory": "./dist" },
-  "routes": [{ "pattern": "quill.philoserf.com", "custom_domain": true }]
-```
-
-`task deploy` runs `bun run check:ci` (Biome, prettier on Markdown, `tsc --noEmit`, `bun test`), then `bun run build`, then `bunx wrangler deploy`. The same `check:ci` runs as a pre-push hook, but pushing deploys nothing. The hostname matters beyond routing: saved letters live in `localStorage` for the `quill.philoserf.com` origin, so serving the app from any other origin would start every player over.
+`bun test` runs the tests but does not type-check. `bun run check:ci` runs Biome, prettier's markdown check, `tsc --noEmit` and the tests, and is wired as the git pre-push hook. `task deploy` runs `check:ci`, then `bun run build` (which deletes `dist/` before bundling so stale hashed bundles never ship), then `bunx wrangler deploy`, which publishes `dist/` to the Worker at `quill.philoserf.com`. That hostname is also the `localStorage` origin, so it is where every saved letter lives.

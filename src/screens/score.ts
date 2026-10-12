@@ -1,6 +1,6 @@
 import { succeeded } from '../dice';
 import { toMarkdown } from '../export';
-import { EMPTY_PARAGRAPH } from '../paragraph';
+import { paragraphProse } from '../paragraph';
 import { formatSignedPoints, score } from '../scoring';
 import type { Character, GameSession, Scenario, Skill } from '../types';
 import { renderLetterhead } from './fragments';
@@ -45,7 +45,7 @@ export function renderScore(ctx: ScoreCtx): HTMLElement {
   for (const p of ctx.session.paragraphs) {
     const para = document.createElement('p');
     para.className = 'letter-paragraph';
-    para.textContent = p.text || EMPTY_PARAGRAPH;
+    para.textContent = paragraphProse(p.text);
     letterCard.appendChild(para);
   }
   const signature = document.createElement('div');

@@ -135,10 +135,11 @@ describe('toMarkdown', () => {
       paragraphs: [
         must(session.paragraphs[0], 'p1'),
         { ...must(session.paragraphs[1], 'p2'), text: '' },
+        { ...must(session.paragraphs[1], 'p2'), text: ' \n ' },
       ],
     };
     const md = toMarkdown(empty, scenario, character, skill);
-    expect(md).toContain('(empty paragraph)');
+    expect(md.match(/\(empty paragraph\)/g)).toHaveLength(2);
     expect(md).not.toMatch(/\n\n\n\n/);
   });
 

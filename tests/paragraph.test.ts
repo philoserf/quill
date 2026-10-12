@@ -5,6 +5,7 @@ import {
   type Draft,
   draftToParagraph,
   emptyDraft,
+  paragraphProse,
   STEP_INDEX,
 } from '../src/paragraph';
 import type { GameSession, Paragraph } from '../src/types';
@@ -209,5 +210,16 @@ describe('commitParagraph', () => {
     commitParagraph(before, para());
     expect(before.paragraphs).toHaveLength(0);
     expect(before.status).toBe('in_progress');
+  });
+});
+
+describe('paragraphProse', () => {
+  test('empty and whitespace-only text both show the placeholder (#101)', () => {
+    expect(paragraphProse('')).toBe('(empty paragraph)');
+    expect(paragraphProse('  \n\t ')).toBe('(empty paragraph)');
+  });
+
+  test('prose is shown trimmed', () => {
+    expect(paragraphProse('  Dear Archduke,\n')).toBe('Dear Archduke,');
   });
 });

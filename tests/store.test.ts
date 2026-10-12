@@ -117,6 +117,14 @@ describe('hydration', () => {
     expect(localStorage.getItem(CORRUPT)).toBe(raw);
   });
 
+  test('quarantines a paragraph with no text, which render would trim', () => {
+    const p = { inkPotIndex: 0, heartRoll: null, languageRoll: [1], penmanshipRoll: [1] };
+    const raw = JSON.stringify(session({ paragraphs: [p] as never }));
+    localStorage.setItem(KEY, raw);
+    expect(load()).toBeNull();
+    expect(localStorage.getItem(CORRUPT)).toBe(raw);
+  });
+
   test('accepts a well-formed paragraph, including a null heartRoll', () => {
     const p = {
       inkPotIndex: 2,

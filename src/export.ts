@@ -7,9 +7,10 @@ const EMDASH = '—';
 
 /** Player text reaches the game-record table unmodified, and the flourish input
  *  has no pattern or sanitisation. A literal pipe adds a cell; a pasted newline
- *  splits the row and terminates the table early. */
+ *  splits the row and terminates the table early. Backslashes go first, or a
+ *  typed `\|` becomes `\\|` — an escaped backslash, then a bare pipe. */
 function escapeCell(text: string): string {
-  return text.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+  return text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 }
 
 /** Frontmatter scalars are unquoted, so a scenario title carrying a colon or a

@@ -56,6 +56,11 @@ const session: GameSession = {
   ],
 };
 
+// Cells as Markdown reads them: each backslash escapes the next character, so
+// drop those pairs before splitting. A lookbehind on one backslash would call
+// `\\|` escaped when it is an escaped backslash followed by a bare pipe.
+const cells = (line: string) => line.replace(/\\./g, '').split('|').length;
+
 describe('toMarkdown', () => {
   test('frontmatter contains character, skill, scenario, score, consequence', () => {
     const md = toMarkdown(session, scenario, character, skill);
@@ -155,9 +160,26 @@ describe('toMarkdown', () => {
       md.split('\n').find((l) => l.startsWith('| # |')),
       'expected the table header',
     );
-    const cells = (line: string) => line.split(/(?<!\\)\|/).length;
     expect(cells(row)).toBe(cells(header));
     expect(row).toContain('bold \\| brazen');
+  });
+
+  test('a backslash before a pipe does not unescape it (#84)', () => {
+    const withBackslash = {
+      ...session,
+      paragraphs: [{ ...must(session.paragraphs[0], 'p1'), flourishAdjective: 'bold \\| brazen' }],
+    };
+    const md = toMarkdown(withBackslash, scenario, character, skill);
+    const row = must(
+      md.split('\n').find((l) => l.startsWith('| 1 |')),
+      'expected row 1',
+    );
+    const header = must(
+      md.split('\n').find((l) => l.startsWith('| # |')),
+      'expected the table header',
+    );
+    expect(cells(row)).toBe(cells(header));
+    expect(row).toContain('bold \\\\\\| brazen');
   });
 
   test('a newline in the flourish word does not split the row', () => {

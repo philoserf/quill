@@ -16,6 +16,23 @@ function storage(): Storage | null {
   }
 }
 
+function isNumbers(v: unknown): boolean {
+  return Array.isArray(v) && v.every((n) => typeof n === 'number');
+}
+
+// The paragraph fields the render path dereferences: the rolls are counted
+// and the index resolves a word. A bad element must fail here, not in render.
+function isParagraph(v: unknown): boolean {
+  if (typeof v !== 'object' || v === null) return false;
+  const p = v as Record<string, unknown>;
+  return (
+    typeof p.inkPotIndex === 'number' &&
+    isNumbers(p.languageRoll) &&
+    isNumbers(p.penmanshipRoll) &&
+    (p.heartRoll === null || isNumbers(p.heartRoll))
+  );
+}
+
 // What the render path actually dereferences. Weaker than this and a payload
 // that parses can still crash every render; the quarantine below is the point
 // of checking, since it preserves the payload instead of destroying it.
@@ -30,6 +47,7 @@ function isSession(v: unknown): v is GameSession {
     typeof s.scenarioId === 'string' &&
     typeof s.skillSpent === 'boolean' &&
     Array.isArray(s.paragraphs) &&
+    s.paragraphs.every(isParagraph) &&
     (s.status === 'in_progress' || s.status === 'finished')
   );
 }
@@ -84,6 +102,15 @@ export function save(session: GameSession | null): boolean {
   } catch {
     return false;
   }
+}
+
+/** Sets the stored session aside instead of deleting it — the recovery path
+ *  for a session that loaded but could not be shown. Same rule as a
+ *  quarantine on load: never overwrite an existing backup. */
+export function discard(): void {
+  const store = storage();
+  const raw = store?.getItem(KEY) ?? null;
+  if (store && raw !== null) quarantine(store, raw);
 }
 
 export function clear(): boolean {

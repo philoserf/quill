@@ -13,6 +13,7 @@
 - A flourish containing `\|` no longer splits a cell in the exported game-record table.
 - A saved letter whose scenario, character or skill no longer exists is set aside as a backup instead of being deleted.
 - A paragraph of only spaces or line breaks now shows _(empty paragraph)_ on screen, as it already did in the export.
+- A flourish typed with a leading or trailing space no longer stops the write step from recognising the phrase, and the space no longer reaches the Score screen or the export.
 
 ## 0.2.0
 

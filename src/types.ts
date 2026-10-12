@@ -47,6 +47,10 @@ export interface Scenario {
 }
 
 export interface Paragraph {
+  // A position in the scenario's inkPot, resolved at render and export time
+  // against whatever SCENARIOS holds then. Saved sessions outlive deploys, so
+  // an existing scenario's inkPot is append-only: reordering, removing or
+  // repurposing an entry silently changes the word in every stored letter.
   inkPotIndex: number;
   flourishAdjective: string | null;
   heartRoll: number[] | null;

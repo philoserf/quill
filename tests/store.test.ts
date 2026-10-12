@@ -125,6 +125,21 @@ describe('hydration', () => {
     expect(localStorage.getItem(CORRUPT)).toBe(raw);
   });
 
+  test('quarantines a paragraph whose flourish word is not a string (#117)', () => {
+    const p = {
+      inkPotIndex: 0,
+      flourishAdjective: 7,
+      heartRoll: [6],
+      languageRoll: [1],
+      penmanshipRoll: [1],
+      text: 'x',
+    };
+    const raw = JSON.stringify(session({ paragraphs: [p] as never }));
+    localStorage.setItem(KEY, raw);
+    expect(load()).toBeNull();
+    expect(localStorage.getItem(CORRUPT)).toBe(raw);
+  });
+
   test('accepts a well-formed paragraph, including a null heartRoll', () => {
     const p = {
       inkPotIndex: 2,

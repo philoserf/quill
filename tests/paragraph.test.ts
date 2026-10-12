@@ -216,13 +216,18 @@ describe('draftToParagraph', () => {
     expect(p?.text).toBe('');
   });
 
-  test('a flourish word that was never confirmed becomes null', () => {
+  test('the flourish word is kept exactly when there is a Heart roll (#116)', () => {
+    // No Heart roll: the word was typed but never attempted, so it is dropped.
     expect(
-      draftToParagraph({ ...complete(), flourishAdjective: '   ' })?.flourishAdjective,
+      draftToParagraph({ ...complete(), flourishAdjective: 'grand' })?.flourishAdjective,
     ).toBeNull();
-    expect(draftToParagraph({ ...complete(), flourishAdjective: 'grand' })?.flourishAdjective).toBe(
-      'grand',
-    );
+    const attempted = draftToParagraph({
+      ...complete(),
+      flourishAdjective: 'grand',
+      heartRoll: [6],
+    });
+    expect(attempted?.flourishAdjective).toBe('grand');
+    expect(attempted?.heartRoll).toEqual([6]);
   });
 });
 

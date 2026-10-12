@@ -20,13 +20,14 @@ function isNumbers(v: unknown): boolean {
   return Array.isArray(v) && v.every((n) => typeof n === 'number');
 }
 
-// The paragraph fields the render path dereferences: the rolls are counted
-// and the index resolves a word. A bad element must fail here, not in render.
+// The paragraph fields the render path dereferences: the rolls are counted,
+// the index resolves a word, and the text is trimmed by paragraphProse(). A bad element must fail here, not in render.
 function isParagraph(v: unknown): boolean {
   if (typeof v !== 'object' || v === null) return false;
   const p = v as Record<string, unknown>;
   return (
     typeof p.inkPotIndex === 'number' &&
+    typeof p.text === 'string' &&
     isNumbers(p.languageRoll) &&
     isNumbers(p.penmanshipRoll) &&
     (p.heartRoll === null || isNumbers(p.heartRoll))

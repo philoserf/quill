@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { clear, discard, load, save } from '../src/store';
+import { discard, load, save } from '../src/store';
 import type { GameSession } from '../src/types';
 
 const KEY = 'quill.session.v1';
@@ -51,7 +51,7 @@ function session(overrides: Partial<GameSession> = {}): GameSession {
 beforeEach(() => install(new FakeStorage()));
 afterEach(() => install(undefined));
 
-describe('load / save / clear', () => {
+describe('load / save', () => {
   test('round-trips a session', () => {
     expect(save(session({ id: 'abc' }))).toBe(true);
     expect(load()?.id).toBe('abc');
@@ -61,9 +61,9 @@ describe('load / save / clear', () => {
     expect(load()).toBeNull();
   });
 
-  test('clear removes the key', () => {
+  test('saving null removes the key', () => {
     save(session());
-    clear();
+    save(null);
     expect(localStorage.getItem(KEY)).toBeNull();
     expect(load()).toBeNull();
   });
@@ -171,7 +171,7 @@ describe('hostile storage', () => {
     });
     expect(load()).toBeNull();
     expect(save(session())).toBe(false);
-    expect(clear()).toBe(false);
+    expect(save(null)).toBe(false);
   });
 
   test('save reports failure rather than throwing when the write is refused', () => {
@@ -186,14 +186,14 @@ describe('hostile storage', () => {
     expect(save(session())).toBe(false);
   });
 
-  test('clear reports failure rather than throwing when removal is refused', () => {
+  test('saving null reports failure rather than throwing when removal is refused', () => {
     const hostile = new FakeStorage() as unknown as Storage;
     hostile.removeItem = () => {
       throw new Error('SecurityError');
     };
     install(hostile);
-    expect(() => clear()).not.toThrow();
-    expect(clear()).toBe(false);
+    expect(() => save(null)).not.toThrow();
+    expect(save(null)).toBe(false);
   });
 
   test('a quarantine that cannot be written leaves the original in place', () => {

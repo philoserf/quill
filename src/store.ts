@@ -52,7 +52,7 @@ function isSession(v: unknown): v is GameSession {
   );
 }
 
-// v1 wrapped the session in `{ session }`. `clear()` has always used
+// v1 wrapped the session in `{ session }`. Clearing has always used
 // removeItem, so `{ session: null }` was never written — the only shapes that
 // can be on disk are absent or `{ session: GameSession }`.
 function unwrap(parsed: unknown): unknown {
@@ -111,8 +111,4 @@ export function discard(): void {
   const store = storage();
   const raw = store?.getItem(KEY) ?? null;
   if (store && raw !== null) quarantine(store, raw);
-}
-
-export function clear(): boolean {
-  return save(null);
 }

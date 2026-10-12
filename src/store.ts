@@ -21,13 +21,15 @@ function isNumbers(v: unknown): boolean {
 }
 
 // The paragraph fields the render path dereferences: the rolls are counted,
-// the index resolves a word, and the text is trimmed by paragraphProse(). A bad element must fail here, not in render.
+// the index resolves a word, the text is trimmed by paragraphProse(), and the
+// flourish word is printed by the export and the Score screen. A bad element must fail here, not in render.
 function isParagraph(v: unknown): boolean {
   if (typeof v !== 'object' || v === null) return false;
   const p = v as Record<string, unknown>;
   return (
     typeof p.inkPotIndex === 'number' &&
     typeof p.text === 'string' &&
+    (p.flourishAdjective === null || typeof p.flourishAdjective === 'string') &&
     isNumbers(p.languageRoll) &&
     isNumbers(p.penmanshipRoll) &&
     (p.heartRoll === null || isNumbers(p.heartRoll))

@@ -150,7 +150,9 @@ export function draftToParagraph(d: Draft): Paragraph | null {
   if (d.inkPotIndex === null || d.languageRoll === null || d.penmanshipRoll === null) return null;
   return {
     inkPotIndex: d.inkPotIndex,
-    flourishAdjective: d.flourishAdjective.trim() || null,
+    // The Heart roll is the record of an attempt (#66); the word follows it,
+    // so the two cannot disagree. advance() already trimmed it (#116).
+    flourishAdjective: d.heartRoll !== null ? d.flourishAdjective : null,
     heartRoll: d.heartRoll,
     languageRoll: d.languageRoll,
     penmanshipRoll: d.penmanshipRoll,

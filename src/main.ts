@@ -5,7 +5,7 @@ import { renderPlay } from './screens/play';
 import { renderScore } from './screens/score';
 import { renderSetup } from './screens/setup';
 import { discard, load, save } from './store';
-import type { GameSession, Scenario } from './types';
+import type { GameSession } from './types';
 
 function newSession(sel: {
   characterId: string;
@@ -27,11 +27,11 @@ function newSession(sel: {
 // A session can only be stale *as loaded*: characters, skills and scenarios are
 // all compile-time constants, so the id sets are fixed for the life of the page.
 // Checking once at mount keeps the recovery write out of any render.
-function hydrate(scenarios: Scenario[]): GameSession | null {
+function hydrate(): GameSession | null {
   const session = load();
   if (!session) return null;
   const known =
-    scenarios.some((s) => s.id === session.scenarioId) &&
+    SCENARIOS.some((s) => s.id === session.scenarioId) &&
     characterById(session.characterId) !== undefined &&
     skillById(session.skillId) !== undefined;
   if (!known) {
@@ -43,12 +43,12 @@ function hydrate(scenarios: Scenario[]): GameSession | null {
   return session;
 }
 
-function mount(scenarios: Scenario[]) {
+function mount() {
   const el = document.getElementById('app');
   if (!el) throw new Error('Missing #app');
   const rootEl: HTMLElement = el;
 
-  let session = hydrate(scenarios);
+  let session = hydrate();
   let warnedAboutSaving = false;
 
   // Persisting and repainting are separate channels. A phase transition inside
@@ -69,7 +69,7 @@ function mount(scenarios: Scenario[]) {
     if (!session) {
       rootEl.appendChild(
         renderSetup({
-          scenarios,
+          scenarios: SCENARIOS,
           onBegin: (sel) => commit(newSession(sel)),
         }),
       );
@@ -79,7 +79,7 @@ function mount(scenarios: Scenario[]) {
     // hydrate() proved all three resolve; the screens are handed the values so
     // they never look them up again or branch on a failure that cannot happen.
     const current = session;
-    const scenario = scenarios.find((s) => s.id === current.scenarioId);
+    const scenario = SCENARIOS.find((s) => s.id === current.scenarioId);
     const character = characterById(current.characterId);
     const skill = skillById(current.skillId);
     if (!scenario || !character || !skill) {
@@ -113,7 +113,7 @@ function mount(scenarios: Scenario[]) {
 }
 
 try {
-  mount(SCENARIOS);
+  mount();
 } catch (err) {
   // A failed boot gets a way out rather than a dead-end string. This covers
   // mount's first render only: later renders run from event handlers, outside

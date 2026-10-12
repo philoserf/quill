@@ -1,7 +1,7 @@
 version: "3"
 
 # Only tasks that carry content a `package.json` script does not.
-# Everything else — dev, build, test, check, fix — is a `bun run <script>`;
+# Everything else — dev, build, test, check, check:ci, format — is a `bun run <script>`;
 # see `package.json`, which the README documents as the way to run them.
 
 tasks:

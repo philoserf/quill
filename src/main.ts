@@ -4,7 +4,7 @@ import { SCENARIOS } from './scenarios';
 import { renderPlay } from './screens/play';
 import { renderScore } from './screens/score';
 import { renderSetup } from './screens/setup';
-import { clear, discard, load, save } from './store';
+import { discard, load, save } from './store';
 import type { GameSession, Scenario } from './types';
 
 function newSession(sel: {
@@ -35,7 +35,9 @@ function hydrate(scenarios: Scenario[]): GameSession | null {
     characterById(session.characterId) !== undefined &&
     skillById(session.skillId) !== undefined;
   if (!known) {
-    clear();
+    // Set aside, not delete: a deploy that renamed an id must not erase the
+    // letter (#100).
+    discard();
     return null;
   }
   return session;

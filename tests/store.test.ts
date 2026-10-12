@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { clear, load, save } from '../src/store';
+import { clear, discard, load, save } from '../src/store';
 import type { GameSession } from '../src/types';
 
 const KEY = 'quill.session.v1';
@@ -108,9 +108,55 @@ describe('hydration', () => {
     expect(localStorage.getItem(CORRUPT)).toBe('first');
   });
 
+  test('quarantines a session whose paragraph is missing its rolls', () => {
+    // #78: the array passed, the element did not, and render called
+    // .filter on undefined.
+    const raw = JSON.stringify(session({ paragraphs: [{ inkPotIndex: 0 }] as never }));
+    localStorage.setItem(KEY, raw);
+    expect(load()).toBeNull();
+    expect(localStorage.getItem(CORRUPT)).toBe(raw);
+  });
+
+  test('accepts a well-formed paragraph, including a null heartRoll', () => {
+    const p = {
+      inkPotIndex: 2,
+      flourishAdjective: null,
+      heartRoll: null,
+      languageRoll: [4, 6],
+      penmanshipRoll: [1, 5, 6],
+      skillUsedHere: null,
+      text: 'Dear Archduke,',
+    };
+    save(session({ paragraphs: [p] }));
+    expect(load()?.paragraphs).toEqual([p]);
+  });
+
   test('rejects a session whose status is not one of the two literals', () => {
     localStorage.setItem(KEY, JSON.stringify({ ...session(), status: 'halfway' }));
     expect(load()).toBeNull();
+  });
+});
+
+describe('discard', () => {
+  test('sets the stored session aside instead of deleting it', () => {
+    const raw = JSON.stringify(session());
+    localStorage.setItem(KEY, raw);
+    discard();
+    expect(localStorage.getItem(KEY)).toBeNull();
+    expect(localStorage.getItem(CORRUPT)).toBe(raw);
+  });
+
+  test('does not overwrite an existing backup', () => {
+    localStorage.setItem(CORRUPT, 'first');
+    localStorage.setItem(KEY, 'second');
+    discard();
+    expect(localStorage.getItem(CORRUPT)).toBe('first');
+    expect(localStorage.getItem(KEY)).toBeNull();
+  });
+
+  test('is a no-op when nothing is stored', () => {
+    discard();
+    expect(localStorage.getItem(CORRUPT)).toBeNull();
   });
 });
 

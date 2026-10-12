@@ -4,7 +4,7 @@ import { SCENARIOS } from './scenarios';
 import { renderPlay } from './screens/play';
 import { renderScore } from './screens/score';
 import { renderSetup } from './screens/setup';
-import { clear, load, save } from './store';
+import { clear, discard, load, save } from './store';
 import type { GameSession, Scenario } from './types';
 
 function newSession(sel: {
@@ -113,7 +113,10 @@ function mount(scenarios: Scenario[]) {
 try {
   mount(SCENARIOS);
 } catch (err) {
-  // Any unrecoverable state gets a way out rather than a dead-end string.
+  // A failed boot gets a way out rather than a dead-end string. This covers
+  // mount's first render only: later renders run from event handlers, outside
+  // this try. That is safe because hydrate() has already proven the session's
+  // ids, and compile-time constants cannot stop resolving mid-session.
   const root = document.getElementById('app');
   if (root) {
     root.replaceChildren();
@@ -124,7 +127,9 @@ try {
     restart.className = 'btn btn--primary';
     restart.textContent = 'Start a new letter';
     restart.addEventListener('click', () => {
-      clear();
+      // Set the letter aside, not delete it: the crash may be a shape the
+      // store's check did not anticipate, and this is the player's only copy.
+      discard();
       location.reload();
     });
     root.append(msg, restart);

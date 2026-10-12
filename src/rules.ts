@@ -34,7 +34,8 @@ export function planRoll(args: {
       default: {
         // Compile-time exhaustiveness: TS errors if a new Modifier variant is added.
         const _exhaustive: never = mod;
-        // Runtime safety: a payload that escaped validation (e.g., tampered session) still fails loudly.
+        // Runtime: reachable only if a cast bypasses the check above. Modifiers come from the
+        // compiled SCENARIOS, never from storage, so a tampered session cannot get here (#102).
         throw new Error(`Unhandled modifier: ${JSON.stringify(_exhaustive)}`);
       }
     }

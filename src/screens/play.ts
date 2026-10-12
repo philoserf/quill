@@ -3,9 +3,9 @@ import type { Draft } from '../paragraph';
 import {
   advance,
   draftToParagraph,
-  EMPTY_PARAGRAPH,
   emptyDraft,
   type PhaseName,
+  paragraphProse,
   STEP_INDEX,
 } from '../paragraph';
 import { applyReroll, planRoll } from '../rules';
@@ -205,7 +205,7 @@ function renderLetter(v: PlayView): HTMLElement {
   for (const p of v.session.paragraphs) {
     const para = document.createElement('p');
     para.className = 'letter-paragraph';
-    para.textContent = p.text || EMPTY_PARAGRAPH;
+    para.textContent = paragraphProse(p.text);
     letter.appendChild(para);
   }
 
@@ -241,7 +241,7 @@ function renderLetterDraftSlot(v: PlayView): HTMLElement {
     case 'PARAGRAPH_DONE': {
       const p = document.createElement('p');
       p.className = 'letter-paragraph';
-      p.textContent = v.state.draft.text || EMPTY_PARAGRAPH;
+      p.textContent = paragraphProse(v.state.draft.text);
       wrap.appendChild(p);
       break;
     }

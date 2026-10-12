@@ -5,6 +5,13 @@ import { PARAGRAPHS_PER_LETTER } from './types';
  *  paragraph is permitted; rendering nothing at all is what was not intended. */
 export const EMPTY_PARAGRAPH = '(empty paragraph)';
 
+/** The prose to show for a paragraph — the one rule for every place that
+ *  renders it, so the screens and the export agree. Whitespace-only text
+ *  counts as empty (#101), and prose is shown trimmed. */
+export function paragraphProse(text: string): string {
+  return text.trim() || EMPTY_PARAGRAPH;
+}
+
 export type PhaseName =
   | 'PICK_WORD'
   | 'DECIDE_FLOURISH'

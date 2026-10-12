@@ -1,258 +1,136 @@
-# THEORY.md
+# Theory of Quill
 
-A theory of Quill in Naur's sense: what you need to hold in mind to change this app without
-damaging it. It assumes you can read TypeScript and will not repeat what the file tree
-already tells you. Regenerated 2026-09-16, after the refactor arc that runs from #59 to #74.
+This is an account of what you need to hold in mind to change Quill without breaking it. It is not a tour of the files. Where it says something the code alone cannot prove, it says so, and the last section collects those places.
 
-## What this models
+## What the system is for
 
-Quill is Scott Malthouse's solo letter-writing roleplaying game. A **correspondent** — one of
-six rulebook archetypes — writes a **letter of five paragraphs** to a recipient described by a
-**scenario**.
+Quill is a solo tabletop game played in a browser. In Scott Malthouse's rulebook, a player takes on a character (Monk, Knight, Poet, Aristocrat, Scholar or Courtier) and writes one letter to one correspondent (the Archduke, the Art Dealer, the Father, the King). The letter has five paragraphs. In each one the player takes a word from the scenario's _ink pot_. A Language test decides whether they must use its _superior_ or _inferior_ form. They may first attempt a _flourish_, an adjective of their own, which a Heart test decides whether it holds. After writing, a Penmanship test decides whether the hand was fine. Points come only from those three tests. The total falls into one of four _consequence tiers_, and each tier has its own prose ending for that correspondent.
 
-The dice never decide what the letter says. They decide the _vocabulary the player is obliged
-to write with_, and then they score the result. That inversion is the whole design and every
-module inherits it.
+The code's vocabulary follows the rulebook closely, and the mapping is worth learning once:
 
-Each paragraph is built around one **word** drawn from the scenario's **ink pot**, a list of
-paired synonyms: an `inferior` form and a `superior` one. A **Language** roll decides which of
-the pair the player must use. Before that, the player may attempt a **flourish** — an
-adjective of their own invention — and a **Heart** roll decides whether it survives into the
-required phrase. Only after the paragraph is written does a **Penmanship** roll judge the hand
-it was written in; it changes no words, only points.
+- A **character** has three **attributes** (`penmanship`, `language`, `heart`), each rated `poor | average | good`. The rating is a dice count of 1, 2 or 3 (`diceForRating`). Nothing else about a character affects play.
+- A **skill** is a one-time gift of one extra die on one attribute, spendable once per _letter_, not once per paragraph. `GameSession.skillSpent` is the latch for the letter; `Draft.skillUsedHere` is the spend inside the current paragraph.
+- A **scenario** carries its **rules of correspondence** (`Modifier[]`), which change dice counts or reroll policy, an **ink pot** of ten inferior/superior pairs, and four **consequences**, one per tier.
+- A **roll succeeds** if any die shows 5 or 6. That one rule (`succeeded` in `dice.ts`) is the only success test anywhere. The number of successes beyond one never matters.
 
-So the order Heart → Language → Write → Penmanship is not sequencing, it is the domain. The
-two rolls that shape the required phrase must resolve _before_ the player writes; the roll
-that judges appearance must resolve _after_. Get this backwards and the game stops being a
-game: a player who sees the word's quality before deciding whether to gamble on a flourish is
-making a different bet entirely. `advance` in `src/paragraph.ts` is that order, and it is the
-only place the order exists.
+Points are not a sum of independent tests. A held flourish _multiplies the stakes_ of the Language roll: with a flourish, superior is +2 and inferior is −1; without one, superior is +1 and inferior is 0. Penmanship adds +1 on success either way (`paragraphPoints`). A flourish is a bet, not a bonus. Any change to scoring that treats Heart as an additive bonus has misread the game.
 
-The three attributes — penmanship, language, heart — are the vocabulary every subsystem
-shares. A character has a `Rating` per attribute, a skill grants +1 die to exactly one
-attribute, and a scenario's _Rules of Correspondence_ are modifiers that name an attribute.
-Anything that does not reduce to "an attribute, and a number of dice" does not fit this system
-at all.
-
-Scoring is deliberately coarse and asymmetric, and the asymmetry is the game's only real
-decision. A superior word is +1. A _held_ flourish on a superior word is +2 instead. A held
-flourish on an **inferior** word is **−1** — worse than never attempting one, which would have
-been 0. A flourish that was _lost_ scores exactly as if it had never been tried. A fine hand
-adds +1 regardless. So attempting a flourish is a bet placed before the word's quality is
-known, which is precisely what the phase order enforces. The count of successes past the first
-never matters anywhere: one die showing 5 or 6 is the whole signal.
+The app checks no prose. The write step shows the phrase the player should use ("Incorporate: …") and a live indicator of whether it appears, but _Finish paragraph_ is always enabled and nothing gates on the indicator. The game is an honour system around dice. The software keeps the dice honest and the record faithful, and leaves the writing to the player.
 
 ## The organizing ideas
 
-### Invariants live in types where types can reach, and in tests where they cannot
+### A paragraph records dice, not outcomes
 
-This is the thesis of the whole recent history and the thing most likely to be undone by
-someone who has not read it.
+A committed `Paragraph` stores the raw dice of each test (`heartRoll`, `languageRoll`, `penmanshipRoll`), the flourish word, the skill spend, the text, and the _index_ of the ink-pot word. It stores no verdicts: not "superior", not "flourish held", not points. Every consumer works them out again from the dice through `succeeded`: the play screen's ink pot and done summary, the Score screen's breakdown, `score()`, and the Markdown export.
 
-`src/scenarios.ts` used to be 141 lines, ~120 of them a hand-written runtime validator that
-ran on every app start over four committed JSON files. It is gone. The reason it went is
-specific and worth knowing: the JSON files were _imported at build time_ — Bun's HTML dev
-server answers a request for a sibling JSON file with the SPA's own HTML, so `fetch` never
-worked — which means **the data boundary the validator guarded had already stopped existing**.
-It was defending a frontier that the build had erased. `SCENARIOS: Scenario[]` replaced it,
-and the type is the stricter gate: an unhandled modifier `type` or a stray key is now a
-compile error rather than a runtime coercion.
+Two consequences follow, and both matter more than they look.
 
-The same move is visible everywhere once you look for it. `ConsequenceTier.threshold` was a
-per-scenario field that every scenario was forbidden from varying, so it became `TIERS` in
-`src/types.ts` with `TierName` derived from it — a scenario now supplies four strings and
-cannot invent a fifth tier. `PhaseName` was a bare union with the real order scattered across
-eight assignments in DOM-construction functions; it became `advance`. `STEP_INDEX` is typed
-`Record<PhaseName, number>`. Even the Roman numerals are gated: `ROMAN` carries
-`satisfies { length: typeof PARAGRAPHS_PER_LETTER }`, and a four-element array is a compile
-error, which I confirmed by making one.
+First, **the success rule and the scoring table apply retroactively.** Change `isSuccess`, `paragraphPoints` or `TIERS` and every letter already saved in a player's browser rescores on its next render, finished letters included. The design accepts this because it keeps one source of truth. A maintainer who wants letters to keep their original score would have to start storing verdicts, which is a change of theory, not a tweak.
 
-What the types cannot say went to `tests/scenarios.test.ts`, and that file is the residue,
-not an afterthought: every ink pot holds at least `PARAGRAPHS_PER_LETTER` words (a four-word
-scenario would deadlock the play screen at paragraph five, and the old validator only ever
-rejected an _empty_ pot); every `dice_bonus` amount is a positive integer; every `appliesTo`
-names a real character id. That last one exists because `Character.id` is a plain `string`, so
-nothing joins the two sides structurally. Note that `bun test` does not typecheck —
-`bun run check:ci` is the gate that catches a malformed constant.
+Second, **the word is a position, not a string.** `inkPotIndex` resolves against whatever `SCENARIOS` holds at render time. Saved letters outlive deploys, so an existing scenario's `inkPot` is append-only. Reordering, removing or rewording an entry silently changes the word in every stored letter. This is stated in `CLAUDE.md` and at the `Paragraph` type (#79), and no test enforces it. The render paths tolerate an index that resolves to nothing: the Score screen and the export print `—`. So the failure is silent wrongness, not a crash.
 
-When you are tempted to add a runtime check, the question this codebase asks is: _is there a
-boundary here, or am I re-checking something the build already fixed?_
+### The record versus the draft
 
-### Durability is per committed paragraph, and that is a game rule
+There are two lifetimes in play, and keeping them apart is the central discipline of the play loop.
 
-`GameSession` holds only committed paragraphs. Everything about the paragraph being written —
-the word picked, the flourish text, the rolls, the prose — lives in `v.state.draft`, a closure
-inside `renderPlay`, and is never persisted.
+The **record** is the `GameSession`: the three choices, the skill latch, the committed paragraphs, and a status of `in_progress | finished`. It is the only thing persisted. It changes only through `commit()` in `main.ts`, and only three events reach it: beginning a letter, committing a paragraph, restarting.
 
-This is not an optimisation. A player who could reload mid-paragraph could re-roll a bad
-result, and in a game with no referee that would make the dice advisory. Reloading discards
-the paragraph in progress and resumes at the start of it. Anyone "fixing" this by persisting
-the draft would be removing the only thing that makes the dice binding.
+The **draft** is the paragraph in progress. It lives in `renderPlay`'s closure as `v.state.draft` and is never persisted. Committing replaces the whole play subtree with a fresh `renderPlay` and a fresh `emptyDraft()`, so there is no reset step to forget. Before b87a87f (#65) and dbee96d (#68), persistence and repainting shared one channel, and every phase transition rewrote `localStorage` (#42). Splitting them is what lets the play screen repaint freely.
 
-The mechanism that enforces it is worth stating because it is an absence. There is no reset.
-Committing calls `onCommit`, `main.ts` builds a **fresh `renderPlay`** with a fresh
-`emptyDraft()`, and the old closure is garbage. An earlier design had module-level state, an
-`ensureDraftFor` that re-keyed the draft by session id, and a comment warning that resetting
-in the wrong order stranded the player on the done screen until they reloaded. All of that
-machinery existed to work around state living in the wrong place, and it went when the state
-moved. If you find yourself writing session-change detection here, the state has escaped the
-closure again.
+The cost of an ephemeral draft is visible to players. Reloading mid-paragraph throws the draft away, including any dice already rolled and a skill spent but not yet committed. The player can therefore reroll a paragraph by reloading. In a solo game that is a tolerable leak, and README's smoke test only promises that the _letter_ restores on reload, not the paragraph. Persisting the draft would close it, but would also bring back every hazard the split removed.
 
-### Persisting and repainting are separate channels
+### The paragraph machine is the only writer of the draft
 
-`src/store.ts` notifies nobody. There is no subscription and no reactivity. `main.ts`'s
-`commit()` writes _and_ renders; the play screen's `repaint()` rebuilds its own subtree and
-writes nothing.
+`advance(draft, event)` in `src/paragraph.ts` owns the seven phases: `PICK_WORD → DECIDE_FLOURISH → (ROLL_HEART) → ROLL_LANGUAGE → WRITE → ROLL_PENMANSHIP → PARAGRAPH_DONE`. Since c77e599 (#112), every change to the draft is an event, including the three plain edits (`setFlourish`, `setText`, `spendSkill`). Each event is phase-guarded, and an event from the wrong phase returns the draft unchanged rather than throwing. The play screen calls `advance` and repaints; it does not assign draft fields itself. The reason is that the machine, unlike the screen, is under test (`tests/paragraph.test.ts`). An invariant enforced only in a click handler is not covered by the tests.
 
-They were one channel once, and every phase transition rewrote localStorage through a
-provably no-op session copy made purely to trigger a repaint. Splitting them is why a phase
-transition now performs zero `setItem` calls and a commit performs exactly one.
+The invariant that took the most passes to settle is **the Heart roll is the record of a flourish attempt.** There used to be three fields for one decision: `attemptedFlourish`, a non-null adjective, and a non-null Heart roll (#28, removed in 521d3f0). What remains:
 
-Three consequences are load-bearing:
+- `attemptFlourish` refuses a blank word and stores it trimmed (#107, #108), so the phrase the write step asks for is exactly the phrase the player typed.
+- `writePlainly` clears the word and skips `ROLL_HEART`, so `heartRoll` stays `null`.
+- `draftToParagraph` keeps the word if and only if there is a Heart roll (#116). On a committed paragraph, `heartRoll !== null` and `flourishAdjective !== null` therefore always agree.
 
-- `save()` returns `false` rather than throwing, because a browser that allows reads and
-  refuses writes used to throw out of every click handler — and, since the notify happened
-  before the persist, the screen repainted anyway and the player watched a working game
-  silently save nothing. `main.ts` warns once.
-- The scenario-recall toggle mutates `panel.hidden` **in place** rather than repainting. This
-  looks like an inconsistency and is not: a repaint rebuilds the play subtree.
-- Which matters because of `attachRollButton`. The roll button shakes for 250ms, and its
-  timer closes over the dice plan computed when the button was _built_. If a repaint happens
-  during the shake — spending the skill is the live case — that button is detached and a new
-  one exists with a fresh plan. `btn.isConnected` aborts the stale callback. This is also why
-  `v.state` is one shared object per letter rather than a copy: the new button must read the
-  current draft, not a snapshot.
+`draftToParagraph` is the single Draft-to-Paragraph mapping. The done step calls it twice, once to preview the points and once to commit, so the previewed score and the recorded score cannot drift. Empty text is deliberately committable. `paragraphProse` turns empty or whitespace-only text into `(empty paragraph)` the same way on screen and in the export (#101).
 
-### Resolution happens once, at hydration
+`STEP_INDEX` maps phases to stepper columns, and it is presentation, not transition. `DECIDE_FLOURISH` and `ROLL_HEART` share a column because the player sees "Flourish" as one step whether or not they attempt it.
 
-`main.ts` proves at mount that the session's scenario, character and skill all resolve, then
-hands the screens the resolved **values**. The screens never look them up and never branch on
-a failure that cannot happen. Seven `characterById`/`skillById` calls inside `src/screens/`
-were deleted along with five different invented fallbacks for a question already answered.
+### Rules are typed data, executed in one place
 
-The reasoning is written at `src/main.ts:27`: these are compile-time constants, so the id sets
-are "fixed for the life of the page." Hold onto that sentence — it is exactly right about the
-scope it names, and the section on seams is about what happens outside it.
+Scenarios used to be JSON fetched at runtime and checked by a hand-written validator (#45, #55). Since d5622ca (#64) they are `Scenario`-typed constants in `src/scenarios.ts`, so a malformed scenario is a compile error. `tests/scenarios.test.ts` covers only what `tsc` cannot express: each ink pot holds at least `PARAGRAPHS_PER_LETTER` words (fewer would deadlock `PICK_WORD`), `dice_bonus` amounts are positive integers, `appliesTo` names real character ids, and every tier has prose. `bun test` alone does not type-check; `check:ci` does.
 
-### Only two things a scenario can do to a roll
+`Modifier` is a two-variant union. `planRoll` turns a character, a scenario, an attribute and the skill into a dice count and a reroll policy, and its `switch` is exhaustive at compile time. `applyReroll` carries out `reroll_highest` beside the rule that asks for it (#43). It replaces the highest die _unconditionally_, even a success. That is what makes the Art Dealer's Penmanship rule a hazard rather than a help, and a "fix" that only rerolls failures would invert the rulebook.
 
-`RollPlan` has two fields, `diceCount` and `rerollPolicy`. `dice_bonus` adds dice and may be
-gated to named characters; `reroll_highest` replaces the highest die with a fresh one —
-**unconditionally, including when it was already a 6**, which is what makes it a hazard rather
-than a gift. `planRoll` decides the policy and `applyReroll` carries it out, and both now live
-in `src/rules.ts` so that one file answers "what does this rule cost." They were 400 lines
-apart, with the mechanic buried in a click handler and the only tests asserting on the flag.
+`TIERS` in `src/types.ts` is the one ordered table of thresholds and names. `TierName` derives from it, and `Scenario.consequences` is a `Record<TierName, string>`, so a scenario supplies prose but cannot move the boundaries (#30). `tierFor` floors negative totals to `unsuccessful`, which is reachable because a held flourish on an inferior word scores −1.
+
+`PARAGRAPHS_PER_LETTER` is the one definition of letter length (#33). The play screen's `ROMAN` numerals are pinned to it with `satisfies { length: … }`, so changing the length is a compile error until the numerals agree.
+
+### Storage is the only untrusted input
+
+Everything the app renders is either a compile-time constant or something it wrote itself, except what `localStorage` hands back at boot. The whole defensive posture is aimed at that one boundary, and nowhere else.
+
+`store.ts` is three functions: `load`, `save` and `discard`. They notify nobody; they replaced a generic pub/sub store that had one subscriber (#51). Every storage access goes through `storage()`, because merely _reading_ `globalThis.localStorage` throws when the browser blocks site data. `save` returns `false` rather than throwing, and `main.ts` logs a console warning once. The player is not told. Whether they should be is a product choice the code leaves open.
+
+`isSession`/`isParagraph` check exactly the fields the render path dereferences: rolls that get counted, an index that gets looked up, text that gets trimmed, a flourish word that gets printed (#78, #117). The yardstick is "would rendering this crash", not "does this look like a session". `skillUsedHere` is not checked because nothing renders it. If you add a render path that reads a new field, extend the predicate in the same change.
+
+The recovery rule is **set aside, never delete.** A stored letter may be the player's only copy, so every path that rejects one moves it to `quill.session.v1.corrupt`:
+
+- `load()` on a parse failure or a bad shape;
+- `hydrate()` in `main.ts` when the character, skill or scenario id no longer resolves (#100, fixed in 207a366);
+- the boot error screen's _Start a new letter_, through `discard()` (6377dca, #94).
+
+There is one backup slot, and a quarantine never overwrites it, because the first letter set aside is judged the one the player most wants. So while the slot is full, a later rejected letter is deleted. Nothing in the app reads the backup back; recovery is by hand in devtools. This is documented in `CLAUDE.md` and accepted.
+
+`load()` also unwraps the original `{ session }` envelope, so letters saved by the first version still open.
+
+The boot `try` in `main.ts` covers only the first render. Later renders run from event handlers. That is sound only because hydration has already proven the ids, and every later session is produced by `commitParagraph` from one that rendered. Add a second source of sessions (an import, a sync) and that argument no longer holds.
+
+### Two repaint scopes, one shared state object
+
+`main.ts` rebuilds the root whenever the record changes. The play screen rebuilds only its own subtree, through `v.repaint()`, whenever the draft changes. The textarea and flourish input do not repaint at all, because the element already shows what was typed, so focus and caret survive. The recall toggle flips `hidden` in place for the same reason.
+
+`v.state` is one object shared by every render function for the life of one paragraph. That matters for the roll button. It shakes for 250 ms before rolling, and the dice are produced when the timer fires. Spending the skill during the shake repaints and detaches the old button, whose dice plan is now stale, so the timer checks `btn.isConnected` and aborts. The fresh button rolls with the current plan. If the state were copied into each render, a mid-shake repaint could land a roll on a draft nothing reads.
+
+The Setup screen has the same rebuild-everything shape. Because of it, the radiogroup's keyboard model (#47, #74) must find the focused card again by id after each selection (`cardId`, `focusAfterRender`).
 
 ## The seams
 
-**localStorage is the only real boundary left, and it is checked one level deep.** This is the
-sharpest thing in this document. The validator went because the JSON boundary was fictional;
-what remains genuinely outside the build is the persisted session, and the checks there stop
-one level short in two matching ways.
+**The browser origin.** Saved letters are keyed to `quill.philoserf.com`. Changing the hostname silently starts every player over. This boundary is principled and absolute.
 
-`isSession` tests eight fields of the session and, for `paragraphs`, only `Array.isArray` —
-the elements are trusted. `hydrate` tests that the scenario, character and skill _ids_ resolve
-— the ink-pot _indices_ inside the paragraphs are trusted. Same shape twice: the container is
-validated, its contents are not. Both are filed; the second is the more interesting, because
-`Paragraph` stores a _position_ into scenario content and a persisted session outlives the
-deploy that the "fixed for the life of the page" reasoning was scoped to. Reordering an ink
-pot silently makes the game record name a word the player never drew, with the prose intact
-and nothing reporting an error.
+**The host.** `dist/` is served as static assets by a Cloudflare Worker (`wrangler.jsonc`) and deployed by `task deploy`, which runs `check:ci`, then a clean `bun run build`, then `wrangler deploy` (d978347, 9d60a6a). There is no CI. The pre-push hook runs `check:ci`, and a push deploys nothing. The Worker has no code. If one is ever added, it is the first server-side component, and the spec's non-goals ("cloud sync, accounts, or any backend service") would need revisiting. The Cloudflare edge may inject scripts the repo does not contain, which is why `CLAUDE.md` forbids an analytics snippet in `public/index.html`.
 
-**The type migration reached data and transitions and stopped at rendering.** The phase
-_order_ lives in `advance` and the phase→column mapping in `Record<PhaseName, number>`, both
-compiler-gated. But the two `switch (v.state.draft.phase)` statements in `src/screens/play.ts`
-that decide what the letter body and the margin card show are not: adding an eighth phase
-type-checks clean once `STEP_INDEX` is satisfied, and renders an empty slot and an empty card.
-A maintainer who has internalised "the order has one home" will be surprised here, which is
-precisely the kind of place this document exists to flag.
+**The rulebook.** `data.ts` and `scenarios.ts` are transcription. Their ids are a storage contract: `characterId`, `skillId` and `scenarioId` are persisted, so renaming one sets every letter that uses it aside. Their ink pots are a positional contract, as described above. Their prose (descriptions, profiles, consequences) is free to edit.
 
-**Scoring is pure over the session alone.** `score()` lost its `scenario` parameter once the
-tier stopped depending on the scenario; joining a tier to its prose is the caller's job, and
-both callers already hold the scenario. `toMarkdown` is pure and takes the resolved character
-and skill rather than the whole arrays. The browser side of the download — Blob, object URL,
-synthetic anchor, and a `setTimeout` before revoking because revoking inline races the
-browser's own fetch — stays in `score.ts`.
+**The export.** `toMarkdown` is the one thing a player keeps outside the browser. Player text reaches a Markdown table, so `escapeCell` escapes backslashes before pipes (#84) and folds newlines. The scenario title is quoted as a YAML scalar. Character and skill names are not, which is safe only while those constants stay plain. The table reports a flourish only when it held, while the Score screen also shows "flourish lost". The export follows the play screen's done summary. The date in the frontmatter and filename is the UTC date of `startedAt`; the on-screen letterhead deliberately uses local time.
 
-**The screens have no tests.** Eight test files and a helper cover the game layer and stop at
-the DOM. `renderSetup`, `renderPlay` and `renderScore` are verified by the README's six-step
-manual smoke test and by browser checks recorded in commit messages. This is a real boundary in the
-theory: the most intricate code in the repo is the least pinned, and the commit messages are
-where the verification evidence lives.
+**Fonts.** Google Fonts load from the CDN, the one network dependency at runtime. If they fail, the app still works.
 
-## What it accommodates, and what it does not
+## What the system is shaped to accommodate
 
-Adding a scenario is one entry in `SCENARIOS`; the type and `tests/scenarios.test.ts` will
-tell you plainly what you got wrong. Adding a character-gated dice bonus is data. These are
-the well-supported paths.
+**Easy, and safe for anyone who reads `CLAUDE.md`:** a new scenario (append to `SCENARIOS`; the scenario tests cover what types cannot); new consequence prose; a new `dice_bonus` with a character gate; restyling (`public/styles.css` is independent of logic).
 
-Four things require rethinking something:
+**Mechanical, with the compiler as guide:** a new `Modifier` variant (extend the union; `planRoll`'s exhaustive `default` breaks until it is handled, and its executor belongs in `rules.ts` beside `applyReroll`). A new phase (`PhaseName`, then `advance`, `STEP_INDEX`, and both exhaustive switches in `play.ts`, which were made exhaustive for this reason, #75). A different letter length (`PARAGRAPHS_PER_LETTER` and `ROMAN`).
 
-1. **A third kind of modifier.** `RollPlan` needs a field, `planRoll` a case. This is now a
-   _compile_ error rather than a silent runtime fallthrough — `planRoll`'s `default` branch
-   assigns `mod` to `never`. The migration made this safe; it used to be the loudest hazard in
-   the codebase.
-2. **A letter of a length other than five.** `PARAGRAPHS_PER_LETTER` exists and `ROMAN` is
-   checked against it, so this is far better than it was — but `STEP_LABELS` and the stepper
-   are about the five _phases_ of a paragraph, not the five paragraphs, and conflating the two
-   fives is an easy mistake.
-3. **Undo, or more than one letter at a time.** There is no back button by design, the store
-   holds one session under one key, and "no session" _is_ the Setup screen. A history of
-   letters cannot be added at the edges.
-4. **Custom scenario authoring.** A v1 non-goal in `docs/superpowers/specs/`, and deleting the
-   validator was the code catching up to it. If that non-goal ever flips, the runtime boundary
-   reappears and `tests/scenarios.test.ts` is the specification of what the restored validator
-   must check — it already enumerates exactly what the type cannot.
+**Fundamental, and where an uninformed change does damage:**
 
-Where an unaware maintainer does damage: persisting the draft to "not lose work"; routing the
-recall toggle through a repaint; reordering an ink pot in a shipped scenario; reordering the
-cases in `advance`; adding a runtime validator back over data the build already fixed.
+- _Anything that rewrites stored meaning._ Editing an existing ink pot, renaming an id, or changing the success rule or point table changes letters already in players' browsers. The first two are quiet; the last rescores history.
+- _Persisting the draft._ Doing so would close the reload-to-reroll leak, but brings back the write-on-every-transition design that #42 removed, and it puts a second, richer shape through the storage predicate.
+- _More than one letter._ The store holds exactly one session under one key; "Write another letter" discards the finished one. A history of letters means a new storage shape, a migration from `quill.session.v1`, and a quarantine policy for a collection rather than a slot.
+- _Any second source of sessions._ An import, a sync or a share link would put untrusted sessions into later renders, outside the boot error boundary, and against an id check that currently runs once.
+- _Two tabs._ Each tab holds its own copy of the session, and saves are last-write-wins. This is accepted. Fixing it means listening for `storage` events and deciding how a draft reconciles with a record it did not write.
+
+## Accepted trade-offs
+
+These are known and deliberately left alone:
+
+- Two open tabs on one letter reconcile last-write-wins.
+- Letters saved before c77e599 (#112) may carry a stray space around a flourish word, because the word was not trimmed when stored. New letters store it trimmed.
+- One backup slot: while it is full, a later rejected letter is deleted.
+- The draft is not persisted, so reloading mid-paragraph discards its rolls and any uncommitted skill spend.
 
 ## Uncertainties
 
-- **The write-step gate.** The textarea shows a live indicator for whether the required word
-  appears in the prose, but _Finish paragraph_ is enabled regardless and scoring never
-  consults it. I read this as deliberate — the app prompts and scores, it does not referee
-  prose — but no comment says so, and it could equally be an unfinished gate. This was open in
-  the previous theory and the refactor arc did not settle it.
-- **Whether `data.ts` is closed on purpose.** `tests/data.test.ts` asserts the exact six
-  character ids, which reads as "this list is not meant to grow." I am inferring that from a
-  test rather than from any statement.
-- **I did not exercise the app in a browser.** Everything here comes from reading the source
-  and history, and from `bun run check:ci` (Biome clean, `tsc --noEmit` clean, 82 tests) plus
-  targeted probes run through `bun -e`, which is how the two filed findings were verified. The
-  browser verification in this repo lives in commit messages, and I have taken it on trust.
-- **Two earlier uncertainties are now closed**, recorded here so they are not re-opened.
-  Whether `reroll_highest` is meant as a penalty: settled — a test now pins that a highest die
-  which was already a success is replaced anyway. Whether `roll(1)[0] ?? 1` is a considered
-  fallback: settled — it is `noUncheckedIndexedAccess` appeasement, now commented as such.
-
-One methodological note on how to read the previous edition of this file, which described a
-system that no longer exists. Sorting its claims by what survived the refactor arc is
-informative: everything that died was **mechanism** — `validateScenario`, `TIER_NAMES`,
-module-level `currentDraft`, `ensureDraftFor`, reset-before-`onUpdate`, repaint-through-the-
-store. Everything that survived was **domain or principle** — the vocabulary inversion, the
-phase order as the game, attribute-and-dice-count as the only extensible axis, durability per
-committed paragraph, quarantine over deletion, the reroll as a hazard. That split is the best
-available evidence for which parts of this account are essential and which are incidental, and
-it is a reasonable bet that the same will hold for this edition.
-
-## Index
-
-Findings filed by this pass.
-
-| #   | Severity | Finding                                                                                                                                                                                                                                                                                                                                                                                                                              | Primary location                                                  | Tracked as                                          |
-| --- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- | --------------------------------------------------- |
-| 1   | medium   | `isSession` validates the session's fields but only `Array.isArray` on `paragraphs`, so a malformed element passes unquarantined and throws in the render path. The catch handler's _Start a new letter_ button then calls `clear()` with no backup — the store's stated principle is never to destroy a player's only copy, and the one click the app recommends is what destroys it. Same class as the closed #49, one level down. | `src/store.ts:22-35`, `src/store.ts:47-56`, `src/main.ts:126-129` | [#78](https://github.com/philoserf/quill/issues/78) |
-| 2   | medium   | `Paragraph` stores `inkPotIndex`, a position into scenario content, and `hydrate` checks that ids resolve but not that indices still fit. Trimming an ink pot dangles the index, which three call sites render three different ways; reordering one silently makes the game record name a word the player never drew, with no error anywhere.                                                                                        | `src/types.ts:44`, `src/main.ts:30-42`, `src/scenarios.ts`        | [#79](https://github.com/philoserf/quill/issues/79) |
-
-**Total: 2 findings (0 critical, 0 high, 2 medium, 0 low)**
-
-**Related existing findings.** Two open issues from the `code-walkthrough` pass sit on code
-this theory discusses, and are counted there rather than here.
-[#75](https://github.com/philoserf/quill/issues/75) is the rendering half of the type-migration
-seam above — the two play-screen phase switches that are not exhaustiveness-checked.
-[#76](https://github.com/philoserf/quill/issues/76) observes that the mount error boundary
-covers only the first render; it does **not** compound with finding 1, because every first
-render touches `paragraphPoints` or `succeeded`, so that crash always lands inside `mount()`'s
-`try` and the player does reach the recovery button.
+- **Whether reload-to-reroll is consciously accepted.** The code makes it plain: the draft is not persisted, by design and in writing. I found no statement that anyone weighed it as a way around the dice, though. I am inferring acceptance from the solo, honour-system nature of the game, and that is a guess.
+- **Whether retroactive rescoring is intended or only tolerated.** Storing dice rather than verdicts is clearly deliberate: one success rule, applied everywhere. Whether the authors decided that a rules correction _should_ rescore finished letters, or never considered it, the code does not say.
+- **Why the save failure only reaches the console.** `save()`'s doc comment says the caller decides whether to tell the player. `main.ts` decides not to, beyond `console.warn`. That may be a considered choice (no UI for an error the player cannot fix) or a placeholder.
+- **The word indicator's role.** I read the unenforced "Incorporate" check as faithful to a tabletop honour system. It may instead be an unfinished gate. The original spec (`docs/superpowers/specs/`) predates most of the current design, and `CLAUDE.md` says to let the code win where they disagree, so I have not used the spec to settle this.
+- **The single backup slot's policy.** "The first quarantined letter is the one the player most likely wants" is the authors' stated judgment. It is plausible for a crash loop, where every later letter is a fresh one. It is less obvious for a long gap between two unrelated failures. The code is consistent with the rule; the rule itself is a judgment call.
+- **Character and skill names in the export frontmatter** are unquoted while the scenario title is quoted. This is safe for every bundled value. I read it as an omission that only matters for future data, not a decision, but the export comment says the quoting is "for the next one" and mentions only titles.

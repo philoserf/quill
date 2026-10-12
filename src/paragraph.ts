@@ -45,15 +45,27 @@ export function emptyDraft(): Draft {
   };
 }
 
-/** Everything that moves a paragraph forward. Each event carries the data the
+/** Everything that changes a paragraph. Each event carries the data the
  *  transition records, so the order and the data flow have one home instead of
- *  being seven pairs of adjacent lines in DOM-construction functions. */
+ *  being seven pairs of adjacent lines in DOM-construction functions. The three
+ *  edits — the flourish word, the prose, the skill — are events too, so no
+ *  field reaches the draft except through `advance` (#109). */
 export type DraftEvent =
   | { type: 'pickWord'; inkPotIndex: number }
+  | { type: 'setFlourish'; adjective: string }
   | { type: 'attemptFlourish' }
   | { type: 'writePlainly' }
+  | { type: 'spendSkill'; attribute: Attribute }
   | { type: 'rolled'; attribute: Attribute; dice: number[] }
+  | { type: 'setText'; text: string }
   | { type: 'finishParagraph' };
+
+/** The roll each attribute's phase is waiting for. */
+const ROLL_PHASE: Record<Attribute, PhaseName> = {
+  heart: 'ROLL_HEART',
+  language: 'ROLL_LANGUAGE',
+  penmanship: 'ROLL_PENMANSHIP',
+};
 
 /** The paragraph's order: Heart and Language resolve before writing, Penmanship
  *  after. DECIDE_FLOURISH is the only branching phase, which is why this is
@@ -68,13 +80,34 @@ export function advance(draft: Draft, event: DraftEvent): Draft {
       if (draft.phase !== 'PICK_WORD') return draft;
       return { ...draft, inkPotIndex: event.inkPotIndex, phase: 'DECIDE_FLOURISH' };
 
-    case 'attemptFlourish':
+    case 'setFlourish':
       if (draft.phase !== 'DECIDE_FLOURISH') return draft;
-      return { ...draft, phase: 'ROLL_HEART' };
+      return { ...draft, flourishAdjective: event.adjective };
+
+    // A flourish needs a word: scoring keys it off heartRoll and the Score
+    // screen off flourishAdjective, so both must exist together (#108). The
+    // word is trimmed here, once, so the phrase the write step asks for is the
+    // phrase the player typed (#107).
+    case 'attemptFlourish': {
+      if (draft.phase !== 'DECIDE_FLOURISH') return draft;
+      const adjective = draft.flourishAdjective.trim();
+      if (!adjective) return draft;
+      return { ...draft, flourishAdjective: adjective, phase: 'ROLL_HEART' };
+    }
 
     case 'writePlainly':
       if (draft.phase !== 'DECIDE_FLOURISH') return draft;
       return { ...draft, flourishAdjective: '', phase: 'ROLL_LANGUAGE' };
+
+    // Once per paragraph, and only on the roll it boosts. Whether the letter's
+    // one skill is still unspent is the session's fact, checked by the screen.
+    case 'spendSkill':
+      if (draft.phase !== ROLL_PHASE[event.attribute] || draft.skillUsedHere !== null) return draft;
+      return { ...draft, skillUsedHere: event.attribute };
+
+    case 'setText':
+      if (draft.phase !== 'WRITE') return draft;
+      return { ...draft, text: event.text };
 
     case 'finishParagraph':
       if (draft.phase !== 'WRITE') return draft;
@@ -117,7 +150,7 @@ export function draftToParagraph(d: Draft): Paragraph | null {
   if (d.inkPotIndex === null || d.languageRoll === null || d.penmanshipRoll === null) return null;
   return {
     inkPotIndex: d.inkPotIndex,
-    flourishAdjective: d.flourishAdjective.trim() ? d.flourishAdjective : null,
+    flourishAdjective: d.flourishAdjective.trim() || null,
     heartRoll: d.heartRoll,
     languageRoll: d.languageRoll,
     penmanshipRoll: d.penmanshipRoll,

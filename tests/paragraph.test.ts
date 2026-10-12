@@ -49,6 +49,7 @@ describe('advance', () => {
 
     d = advance(d, { type: 'pickWord', inkPotIndex: 2 });
     phases.push(d.phase);
+    d = advance(d, { type: 'setFlourish', adjective: 'solemn' });
     d = advance(d, { type: 'attemptFlourish' });
     phases.push(d.phase);
     d = advance(d, { type: 'rolled', attribute: 'heart', dice: [6] });
@@ -80,7 +81,7 @@ describe('advance', () => {
 
   test('writePlainly discards a flourish word already typed', () => {
     let d = advance(emptyDraft(), { type: 'pickWord', inkPotIndex: 0 });
-    d = { ...d, flourishAdjective: 'sombre' };
+    d = advance(d, { type: 'setFlourish', adjective: 'sombre' });
     d = advance(d, { type: 'writePlainly' });
     expect(d.flourishAdjective).toBe('');
   });
@@ -90,6 +91,7 @@ describe('advance', () => {
   // rather than of two lines happening to sit next to each other.
   test('each roll lands its dice on the matching field', () => {
     let d = advance(emptyDraft(), { type: 'pickWord', inkPotIndex: 0 });
+    d = advance(d, { type: 'setFlourish', adjective: 'grand' });
     d = advance(d, { type: 'attemptFlourish' });
     d = advance(d, { type: 'rolled', attribute: 'heart', dice: [6, 1] });
     expect(d.heartRoll).toEqual([6, 1]);
@@ -111,6 +113,51 @@ describe('advance', () => {
     expect(advance(d, { type: 'rolled', attribute: 'language', dice: [6] })).toEqual(d);
     expect(advance(d, { type: 'finishParagraph' })).toEqual(d);
     expect(advance(d, { type: 'attemptFlourish' })).toEqual(d);
+    expect(advance(d, { type: 'setFlourish', adjective: 'x' })).toEqual(d);
+    expect(advance(d, { type: 'setText', text: 'x' })).toEqual(d);
+    expect(advance(d, { type: 'spendSkill', attribute: 'heart' })).toEqual(d);
+  });
+
+  test('a blank flourish cannot be attempted (#108)', () => {
+    let d = advance(emptyDraft(), { type: 'pickWord', inkPotIndex: 0 });
+    d = advance(d, { type: 'setFlourish', adjective: '   ' });
+    // Same object back: the screen uses that to know it was refused.
+    expect(advance(d, { type: 'attemptFlourish' })).toBe(d);
+    expect(
+      advance(advance(d, { type: 'setFlourish', adjective: '' }), { type: 'attemptFlourish' })
+        .phase,
+    ).toBe('DECIDE_FLOURISH');
+  });
+
+  test('an attempted flourish is stored trimmed (#107)', () => {
+    let d = advance(emptyDraft(), { type: 'pickWord', inkPotIndex: 0 });
+    d = advance(d, { type: 'setFlourish', adjective: ' solemn ' });
+    d = advance(d, { type: 'attemptFlourish' });
+    expect(d.phase).toBe('ROLL_HEART');
+    expect(d.flourishAdjective).toBe('solemn');
+  });
+
+  test('the skill is spent once, on the roll the current phase is waiting for', () => {
+    let d = advance(emptyDraft(), { type: 'pickWord', inkPotIndex: 0 });
+    d = advance(d, { type: 'writePlainly' });
+    expect(advance(d, { type: 'spendSkill', attribute: 'penmanship' })).toBe(d);
+    d = advance(d, { type: 'spendSkill', attribute: 'language' });
+    expect(d.skillUsedHere).toBe('language');
+    d = advance(d, { type: 'rolled', attribute: 'language', dice: [5] });
+    d = advance(d, { type: 'finishParagraph' });
+    expect(advance(d, { type: 'spendSkill', attribute: 'penmanship' }).skillUsedHere).toBe(
+      'language',
+    );
+  });
+
+  test('prose is recorded only while writing', () => {
+    let d = advance(emptyDraft(), { type: 'pickWord', inkPotIndex: 0 });
+    d = advance(d, { type: 'writePlainly' });
+    d = advance(d, { type: 'rolled', attribute: 'language', dice: [5] });
+    d = advance(d, { type: 'setText', text: 'Dear Archduke,' });
+    expect(d.text).toBe('Dear Archduke,');
+    d = advance(d, { type: 'finishParagraph' });
+    expect(advance(d, { type: 'setText', text: 'changed' }).text).toBe('Dear Archduke,');
   });
 
   test('does not mutate the draft it is given', () => {

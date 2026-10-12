@@ -28,14 +28,16 @@ bun run build
 
 ## Deploy
 
-Pushes to `main` build `dist/` and publish it to GitHub Pages via `.github/workflows/deploy.yml`. The site is served from `quill.philoserf.com`; `public/CNAME` holds that hostname and `bun run build` copies it into `dist/` so every deploy re-asserts the custom domain.
+```sh
+task deploy
+```
+
+Checks, builds `dist/`, and publishes it to a Cloudflare Worker with static assets (`wrangler.jsonc`), served at `quill.philoserf.com`. Pushing deploys nothing; there is no CI. The first run on a machine needs `bunx wrangler login` from a real terminal.
 
 The rest of the configuration lives outside the repository:
 
-- DNS (Cloudflare): a `CNAME` record for `quill` pointing at `philoserf.github.io`, proxied.
-- Cloudflare SSL/TLS: Full (strict). Flexible loops against the HTTPS redirect Pages issues on its own.
-- Repository settings → Pages: custom domain `quill.philoserf.com`. GitHub verifies the domain by checking that it resolves to Pages, and through the proxy it sees Cloudflare addresses instead — so _Enforce HTTPS_ may be unavailable, and the same check gates certificate renewal. Cloudflare terminates TLS either way; if a renewal fails, set the record to DNS-only long enough for GitHub to verify, then proxy it again.
-- Analytics: Cloudflare Web Analytics, injected at the edge. Do not put the beacon snippet in `public/index.html` — the edge adds it, and a second copy double-counts every page view.
+- Cloudflare: the Worker `quill`, with `quill.philoserf.com` as its custom domain. Cloudflare creates the DNS record and certificate for it.
+- Analytics: if any, Cloudflare Web Analytics injected at the edge. Do not put the beacon snippet in `public/index.html` — a second copy double-counts every page view.
 
 ## Manual smoke test
 

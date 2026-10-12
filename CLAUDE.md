@@ -10,7 +10,13 @@ Two formatters, split by language and not interchangeable. **Biome owns TypeScri
 
 ## Push and deploy
 
-`git push` runs `bun run check:ci` via a `simple-git-hooks` pre-push hook (config in `package.json`). Bypass with `SKIP_SIMPLE_GIT_HOOKS=1 git push` for emergencies. `.github/workflows/deploy.yml` is the only workflow: a `check` job runs the same suite on pushes and PRs to `main`, then `build` and `deploy` jobs run on pushes only and publish `dist/` to GitHub Pages, serving the site at `quill.philoserf.com`. PRs additionally run `bun run build`, which `check:ci` does not cover. The custom domain lives in `public/CNAME`, which `bun run build` copies to `dist/CNAME` — Bun only emits assets reachable from `public/index.html`, so the copy step is what keeps the domain bound across deploys. The domain is proxied through Cloudflare, which also injects the Web Analytics beacon at the edge — never add that snippet to `public/index.html`, or page views are counted twice. README's Deploy section documents the out-of-repo settings.
+`git push` runs `bun run check:ci` via a `simple-git-hooks` pre-push hook (config in `package.json`). Bypass with `SKIP_SIMPLE_GIT_HOOKS=1 git push` for emergencies. There is no CI and no workflow: pushing deploys nothing.
+
+The site is a Cloudflare Worker serving static assets from `dist/` (`wrangler.jsonc`) at `quill.philoserf.com`. Deploy with `task deploy` from `almanac` or `sextant`: it runs `check:ci`, then `bun run build`, then `bunx wrangler deploy`. Only `dist/` is published, so nothing else in the repo reaches the site. `build` deletes `dist/` first because `bun build` never cleans its `--outdir` — without that, every old hashed bundle would ship alongside the current one. Wrangler authenticates with `bunx wrangler login`, run once per machine from a real terminal (it refuses without a TTY); a Cloudflare API token in the login keychain as `cloudflare-api-token` takes precedence if present.
+
+**The hostname must not change.** Saved letters live in `localStorage` under `quill.philoserf.com`, so any other origin silently starts the player over.
+
+The domain is proxied through Cloudflare, and the edge may inject scripts the repo does not contain — Rocket Loader and the `/cdn-cgi/challenge-platform/` bot check were seen on the Pages host. Never add an analytics snippet to `public/index.html`; if the zone's Web Analytics auto-injects a beacon, a second copy double-counts. README's Deploy section documents the out-of-repo settings.
 
 ## Architecture
 

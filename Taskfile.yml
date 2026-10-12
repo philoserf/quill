@@ -23,3 +23,14 @@ tasks:
     desc: Verify the Brewfile toolchain is installed
     cmds:
       - brew bundle check --file=Brewfile --verbose
+
+  deploy:
+    desc: Check, build, then deploy dist/ to Cloudflare
+    cmds:
+      - bun run check:ci
+      - bun run build
+      - |
+        if token=$(security find-generic-password -s cloudflare-api-token -w 2>/dev/null); then
+          export CLOUDFLARE_API_TOKEN="$token"
+        fi
+        bunx wrangler deploy

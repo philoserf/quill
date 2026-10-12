@@ -245,6 +245,11 @@ function renderLetterDraftSlot(v: PlayView): HTMLElement {
       wrap.appendChild(p);
       break;
     }
+    default: {
+      // Compile-time exhaustiveness: a new PhaseName must be rendered here.
+      const _exhaustive: never = v.state.draft.phase;
+      throw new Error(`Unhandled phase: ${String(_exhaustive)}`);
+    }
   }
   return wrap;
 }
@@ -364,6 +369,11 @@ function renderMarginaliaStepCard(v: PlayView): HTMLElement {
     case 'PARAGRAPH_DONE':
       card.appendChild(renderStepDone(v));
       break;
+    default: {
+      // Compile-time exhaustiveness: a new PhaseName must be rendered here.
+      const _exhaustive: never = v.state.draft.phase;
+      throw new Error(`Unhandled phase: ${String(_exhaustive)}`);
+    }
   }
 
   return card;

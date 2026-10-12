@@ -5,3 +5,4 @@ dist/
 *.pdf
 .env
 .env.local
+.wrangler/

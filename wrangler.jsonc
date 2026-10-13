@@ -2,5 +2,8 @@
   "name": "quill",
   "compatibility_date": "2026-10-12",
   "assets": { "directory": "./dist" },
+  // The custom domain is the only address: no workers.dev, no preview URLs.
+  "workers_dev": false,
+  "preview_urls": false,
   "routes": [{ "pattern": "quill.philoserf.com", "custom_domain": true }]
 }

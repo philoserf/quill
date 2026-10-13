@@ -1,0 +1,5 @@
+# bun build hashes every JS and CSS file it writes, so a changed file gets a new name.
+/*.js
+  Cache-Control: public, max-age=31536000, immutable
+/*.css
+  Cache-Control: public, max-age=31536000, immutable

@@ -174,3 +174,7 @@ export const SCENARIOS: Scenario[] = [
     },
   },
 ];
+
+export function scenarioById(id: string): Scenario | undefined {
+  return SCENARIOS.find((s) => s.id === id);
+}

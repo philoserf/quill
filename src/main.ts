@@ -1,11 +1,11 @@
 import { characterById, skillById } from './data';
 import { commitParagraph } from './paragraph';
-import { SCENARIOS } from './scenarios';
+import { SCENARIOS, scenarioById } from './scenarios';
 import { renderPlay } from './screens/play';
 import { renderScore } from './screens/score';
 import { renderSetup } from './screens/setup';
 import { discard, load, save } from './store';
-import type { GameSession } from './types';
+import type { Character, GameSession, Scenario, Skill } from './types';
 
 function newSession(sel: {
   characterId: string;
@@ -24,17 +24,23 @@ function newSession(sel: {
   };
 }
 
+/** The one statement of which session ids must resolve. */
+function resolve(
+  session: GameSession,
+): { scenario: Scenario; character: Character; skill: Skill } | null {
+  const scenario = scenarioById(session.scenarioId);
+  const character = characterById(session.characterId);
+  const skill = skillById(session.skillId);
+  return scenario && character && skill ? { scenario, character, skill } : null;
+}
+
 // A session can only be stale *as loaded*: characters, skills and scenarios are
 // all compile-time constants, so the id sets are fixed for the life of the page.
 // Checking once at mount keeps the recovery write out of any render.
 function hydrate(): GameSession | null {
   const session = load();
   if (!session) return null;
-  const known =
-    SCENARIOS.some((s) => s.id === session.scenarioId) &&
-    characterById(session.characterId) !== undefined &&
-    skillById(session.skillId) !== undefined;
-  if (!known) {
+  if (!resolve(session)) {
     // Set aside, not delete: a deploy that renamed an id must not erase the
     // letter (#100).
     discard();
@@ -79,12 +85,11 @@ function mount() {
     // hydrate() proved all three resolve; the screens are handed the values so
     // they never look them up again or branch on a failure that cannot happen.
     const current = session;
-    const scenario = SCENARIOS.find((s) => s.id === current.scenarioId);
-    const character = characterById(current.characterId);
-    const skill = skillById(current.skillId);
-    if (!scenario || !character || !skill) {
+    const refs = resolve(current);
+    if (!refs) {
       throw new Error(`Session ${current.id} references data that no longer exists`);
     }
+    const { scenario, character, skill } = refs;
 
     if (current.status === 'in_progress') {
       rootEl.appendChild(

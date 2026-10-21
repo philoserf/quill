@@ -12,9 +12,9 @@ function escapeCell(text: string): string {
   return text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 }
 
-/** Frontmatter scalars are unquoted, so a scenario title carrying a colon or a
- *  leading dash writes an invalid document. All four bundled titles are plain;
- *  this is for the next one. */
+/** Unquoted, a frontmatter value carrying a colon or a leading dash writes an
+ *  invalid document. Every bundled name and title is plain; this is for the
+ *  next one, so every rulebook string in the frontmatter goes through it. */
 function yamlScalar(text: string): string {
   return `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
@@ -45,8 +45,8 @@ export function toMarkdown(
   const frontmatter = [
     '---',
     `date: ${date}`,
-    `character: ${character.name}`,
-    `skill: ${skill.name}`,
+    `character: ${yamlScalar(character.name)}`,
+    `skill: ${yamlScalar(skill.name)}`,
     `scenario: ${yamlScalar(scenario.title)}`,
     `score: ${result.total}`,
     `consequence: ${result.tierName}`,

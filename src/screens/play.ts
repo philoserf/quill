@@ -79,13 +79,6 @@ function attachRollButton(btn: HTMLButtonElement, onRoll: () => void): void {
   });
 }
 
-/** The one underlying fact: this skill applies to this attribute and has not
- *  been spent. Whether the player has already pressed the button this paragraph
- *  is a separate question, answered by `skillUsedHere` at the call site. */
-function skillAvailableFor(v: PlayView, attr: Attribute): boolean {
-  return !v.session.skillSpent && v.skill.bonusAttribute === attr;
-}
-
 export function renderPlay(ctx: PlayCtx): HTMLElement {
   const root = document.createElement('section');
   root.className = 'screen screen--play';
@@ -94,7 +87,10 @@ export function renderPlay(ctx: PlayCtx): HTMLElement {
   // fresh draft, so there is no session-change detection to get wrong.
   const v: PlayView = {
     ...ctx,
-    state: { draft: emptyDraft(), recallOpen: false },
+    state: {
+      draft: emptyDraft(ctx.session.skillSpent ? null : ctx.skill.bonusAttribute),
+      recallOpen: false,
+    },
     repaint,
   };
 
@@ -448,8 +444,8 @@ function renderRollStep(
   verdict?: HTMLElement,
 ): HTMLElement {
   const wrap = document.createElement('div');
-  const skillAvailable = skillAvailableFor(v, attr);
-  const skillBonusActive = skillAvailable && v.state.draft.skillUsedHere === attr;
+  const { spendable, skillUsedHere } = v.state.draft;
+  const skillBonusActive = skillUsedHere === attr;
   const plan = planRoll({
     attribute: attr,
     character: v.character,
@@ -466,7 +462,7 @@ function renderRollStep(
   info.textContent = `Roll ${attrName} (${plan.diceCount} dice${notes}) ${purpose}`;
   wrap.appendChild(info);
 
-  if (skillAvailable && !skillBonusActive) {
+  if (spendable === attr && skillUsedHere === null) {
     const spend = document.createElement('button');
     spend.type = 'button';
     spend.className = 'btn btn--skill';
@@ -610,10 +606,10 @@ function renderMarginaliaReferenceCard(v: PlayView): HTMLElement {
   charLine.append(`${v.character.name} — ${v.skill.name} `);
   const skillNote = document.createElement('span');
   skillNote.className = 'small-caps';
-  // skillSpent only flips when the paragraph is committed; the draft's
-  // skillUsedHere covers the window between spending and committing.
-  const skillSpent = v.session.skillSpent || v.state.draft.skillUsedHere !== null;
-  skillNote.textContent = skillSpent ? 'spent' : 'unspent';
+  // The session's latch only flips on commit; the draft covers the window
+  // between spending and committing.
+  const { spendable, skillUsedHere } = v.state.draft;
+  skillNote.textContent = spendable === null || skillUsedHere !== null ? 'spent' : 'unspent';
   charLine.appendChild(skillNote);
   card.appendChild(charLine);
 

@@ -1,5 +1,5 @@
 import { succeeded } from './dice';
-import type { GameSession, InkPotEntry, Paragraph, Scenario, TierName } from './types';
+import type { GameSession, Paragraph, Scenario, TierName } from './types';
 import { LOWEST_TIER, TIERS } from './types';
 
 export interface ScoreResult {
@@ -26,8 +26,15 @@ export function paragraphPoints(p: Paragraph): number {
   return pts;
 }
 
-/** The word the Language roll lets the player write. */
-export function writtenWord(pair: InkPotEntry, languageRoll: number[]): string {
+/** The word the Language roll lets the player write, or null when the index
+ *  no longer resolves — saved letters outlive edits to `SCENARIOS`. */
+export function writtenWord(
+  scenario: Scenario,
+  inkPotIndex: number,
+  languageRoll: number[],
+): string | null {
+  const pair = scenario.inkPot[inkPotIndex];
+  if (!pair) return null;
   return succeeded(languageRoll) ? pair.superior : pair.inferior;
 }
 
@@ -45,9 +52,8 @@ export interface ParagraphOutcome {
 }
 
 export function paragraphOutcome(p: Paragraph, scenario: Scenario): ParagraphOutcome {
-  const pair = scenario.inkPot[p.inkPotIndex];
   return {
-    word: pair ? writtenWord(pair, p.languageRoll) : null,
+    word: writtenWord(scenario, p.inkPotIndex, p.languageRoll),
     superior: succeeded(p.languageRoll),
     flourish:
       p.flourishAdjective === null

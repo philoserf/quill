@@ -2,9 +2,12 @@ import { describe, expect, test } from 'bun:test';
 import {
   advance,
   commitParagraph,
+  type DoneDraft,
   type Draft,
+  type DraftAt,
   draftToParagraph,
   emptyDraft,
+  type PhaseName,
   paragraphProse,
   STEP_INDEX,
 } from '../src/paragraph';
@@ -36,6 +39,13 @@ function para(overrides: Partial<Paragraph> = {}): Paragraph {
     text: 'a paragraph',
     ...overrides,
   };
+}
+
+/** Asserts the draft reached `phase` and narrows it, so a test can read the
+ *  fields that phase carries. */
+function at<P extends PhaseName>(d: Draft, phase: P): DraftAt<P> {
+  expect(d.phase).toBe(phase);
+  return d as DraftAt<P>;
 }
 
 describe('advance', () => {
@@ -75,15 +85,15 @@ describe('advance', () => {
   test('the plain path skips ROLL_HEART', () => {
     let d = advance(emptyDraft(null), { type: 'pickWord', inkPotIndex: 0 });
     d = advance(d, { type: 'writePlainly' });
-    expect(d.phase).toBe('ROLL_LANGUAGE');
-    expect(d.heartRoll).toBeNull();
+    expect(at(d, 'ROLL_LANGUAGE').flourish).toBeNull();
   });
 
   test('writePlainly discards a flourish word already typed', () => {
     let d = advance(emptyDraft(null), { type: 'pickWord', inkPotIndex: 0 });
     d = advance(d, { type: 'setFlourish', adjective: 'sombre' });
     d = advance(d, { type: 'writePlainly' });
-    expect(d.flourishAdjective).toBe('');
+    expect(at(d, 'ROLL_LANGUAGE').flourish).toBeNull();
+    expect(d).not.toHaveProperty('flourishAdjective');
   });
 
   // Each transition records its data as well as its successor. This is what
@@ -94,16 +104,17 @@ describe('advance', () => {
     d = advance(d, { type: 'setFlourish', adjective: 'grand' });
     d = advance(d, { type: 'attemptFlourish' });
     d = advance(d, { type: 'rolled', attribute: 'heart', dice: [6, 1] });
-    expect(d.heartRoll).toEqual([6, 1]);
+    expect(at(d, 'ROLL_LANGUAGE').flourish).toEqual({ adjective: 'grand', heartRoll: [6, 1] });
     d = advance(d, { type: 'rolled', attribute: 'language', dice: [2] });
-    expect(d.languageRoll).toEqual([2]);
+    expect(at(d, 'WRITE').languageRoll).toEqual([2]);
     d = advance(d, { type: 'finishParagraph' });
     d = advance(d, { type: 'rolled', attribute: 'penmanship', dice: [3, 3] });
-    expect(d.penmanshipRoll).toEqual([3, 3]);
+    expect(at(d, 'PARAGRAPH_DONE').penmanshipRoll).toEqual([3, 3]);
   });
 
   test('pickWord records the chosen index', () => {
-    expect(advance(emptyDraft(null), { type: 'pickWord', inkPotIndex: 7 }).inkPotIndex).toBe(7);
+    const d = advance(emptyDraft(null), { type: 'pickWord', inkPotIndex: 7 });
+    expect(at(d, 'DECIDE_FLOURISH').inkPotIndex).toBe(7);
   });
 
   test('an event from the wrong phase leaves the draft untouched', () => {
@@ -133,8 +144,7 @@ describe('advance', () => {
     let d = advance(emptyDraft(null), { type: 'pickWord', inkPotIndex: 0 });
     d = advance(d, { type: 'setFlourish', adjective: ' solemn ' });
     d = advance(d, { type: 'attemptFlourish' });
-    expect(d.phase).toBe('ROLL_HEART');
-    expect(d.flourishAdjective).toBe('solemn');
+    expect(at(d, 'ROLL_HEART').flourishAdjective).toBe('solemn');
   });
 
   test('the skill is spent once, on the roll the current phase is waiting for', () => {
@@ -167,16 +177,16 @@ describe('advance', () => {
     d = advance(d, { type: 'writePlainly' });
     d = advance(d, { type: 'rolled', attribute: 'language', dice: [5] });
     d = advance(d, { type: 'setText', text: 'Dear Archduke,' });
-    expect(d.text).toBe('Dear Archduke,');
+    expect(at(d, 'WRITE').text).toBe('Dear Archduke,');
     d = advance(d, { type: 'finishParagraph' });
-    expect(advance(d, { type: 'setText', text: 'changed' }).text).toBe('Dear Archduke,');
+    const after = advance(d, { type: 'setText', text: 'changed' });
+    expect(at(after, 'ROLL_PENMANSHIP').text).toBe('Dear Archduke,');
   });
 
   test('does not mutate the draft it is given', () => {
     const d = emptyDraft(null);
     advance(d, { type: 'pickWord', inkPotIndex: 3 });
-    expect(d.inkPotIndex).toBeNull();
-    expect(d.phase).toBe('PICK_WORD');
+    expect(d).toEqual(emptyDraft(null));
   });
 });
 
@@ -201,45 +211,44 @@ describe('STEP_INDEX', () => {
 });
 
 describe('draftToParagraph', () => {
-  function complete(): Draft {
+  function complete(overrides: Partial<DoneDraft> = {}): DoneDraft {
     return {
       ...emptyDraft(null),
       phase: 'PARAGRAPH_DONE',
       inkPotIndex: 1,
+      flourish: null,
       languageRoll: [5],
       penmanshipRoll: [4],
       text: 'written',
+      ...overrides,
     };
   }
 
-  test('returns a Paragraph once the two required rolls and the word exist', () => {
-    expect(draftToParagraph(complete())).not.toBeNull();
-  });
-
-  test('returns null while any required field is missing', () => {
-    for (const missing of ['inkPotIndex', 'languageRoll', 'penmanshipRoll'] as const) {
-      expect(draftToParagraph({ ...complete(), [missing]: null })).toBeNull();
-    }
+  test('carries every recorded field onto the Paragraph', () => {
+    expect(draftToParagraph(complete({ skillUsedHere: 'language' }))).toEqual({
+      inkPotIndex: 1,
+      flourishAdjective: null,
+      heartRoll: null,
+      languageRoll: [5],
+      penmanshipRoll: [4],
+      skillUsedHere: 'language',
+      text: 'written',
+    });
   });
 
   test('empty text is committable — it renders as a placeholder, not nothing', () => {
-    const p = draftToParagraph({ ...complete(), text: '' });
-    expect(p).not.toBeNull();
-    expect(p?.text).toBe('');
+    expect(draftToParagraph(complete({ text: '' })).text).toBe('');
   });
 
-  test('the flourish word is kept exactly when there is a Heart roll (#116)', () => {
-    // No Heart roll: the word was typed but never attempted, so it is dropped.
-    expect(
-      draftToParagraph({ ...complete(), flourishAdjective: 'grand' })?.flourishAdjective,
-    ).toBeNull();
-    const attempted = draftToParagraph({
-      ...complete(),
-      flourishAdjective: 'grand',
-      heartRoll: [6],
-    });
-    expect(attempted?.flourishAdjective).toBe('grand');
-    expect(attempted?.heartRoll).toEqual([6]);
+  test('the flourish word and its Heart roll are recorded together or not at all (#116)', () => {
+    const plain = draftToParagraph(complete());
+    expect(plain.flourishAdjective).toBeNull();
+    expect(plain.heartRoll).toBeNull();
+    const attempted = draftToParagraph(
+      complete({ flourish: { adjective: 'grand', heartRoll: [6] } }),
+    );
+    expect(attempted.flourishAdjective).toBe('grand');
+    expect(attempted.heartRoll).toEqual([6]);
   });
 });
 

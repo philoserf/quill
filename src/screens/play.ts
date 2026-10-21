@@ -1,5 +1,5 @@
 import { isSuccess, roll, succeeded } from '../dice';
-import type { Draft } from '../paragraph';
+import type { DoneDraft, Draft, DraftAt } from '../paragraph';
 import {
   advance,
   draftToParagraph,
@@ -46,11 +46,9 @@ function smallCaps(text: string): HTMLElement {
   return span;
 }
 
-function internalError(msg: string): HTMLElement {
-  const wrap = document.createElement('div');
-  wrap.appendChild(document.createTextNode(msg));
-  return wrap;
-}
+/** Shown in place of a word whose ink pot index no longer resolves, as the
+ *  Score screen and the export do. */
+const MISSING_WORD = '—';
 
 function renderDiceRow(values: number[]): HTMLElement {
   const row = document.createElement('span');
@@ -154,10 +152,12 @@ function renderInkPotCard(v: PlayView): HTMLElement {
 
   const list = document.createElement('ul');
   list.className = 'inkpot-list';
+  const draft = v.state.draft;
+  const chosenIndex = draft.phase === 'PICK_WORD' ? null : draft.inkPotIndex;
   v.scenario.inkPot.forEach((entry, idx) => {
     const used = v.session.paragraphs.find((p) => p.inkPotIndex === idx);
-    const chosen = !used && v.state.draft.inkPotIndex === idx;
-    const pickable = v.state.draft.phase === 'PICK_WORD' && !used;
+    const chosen = !used && chosenIndex === idx;
+    const pickable = draft.phase === 'PICK_WORD' && !used;
 
     const li = document.createElement('li');
     const btn = document.createElement('button');
@@ -213,7 +213,8 @@ function renderLetterDraftSlot(v: PlayView): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'letter-draft';
 
-  switch (v.state.draft.phase) {
+  const draft = v.state.draft;
+  switch (draft.phase) {
     case 'PICK_WORD': {
       const p = document.createElement('p');
       p.className = 'letter-placeholder';
@@ -231,40 +232,30 @@ function renderLetterDraftSlot(v: PlayView): HTMLElement {
       break;
     }
     case 'WRITE':
-      wrap.appendChild(renderWriteSlot(v));
+      wrap.appendChild(renderWriteSlot(v, draft));
       break;
     case 'ROLL_PENMANSHIP':
     case 'PARAGRAPH_DONE': {
       const p = document.createElement('p');
       p.className = 'letter-paragraph';
-      p.textContent = paragraphProse(v.state.draft.text);
+      p.textContent = paragraphProse(draft.text);
       wrap.appendChild(p);
       break;
     }
     default: {
       // Compile-time exhaustiveness: a new PhaseName must be rendered here.
-      const _exhaustive: never = v.state.draft.phase;
-      throw new Error(`Unhandled phase: ${String(_exhaustive)}`);
+      const _exhaustive: never = draft;
+      throw new Error(`Unhandled phase: ${JSON.stringify(_exhaustive)}`);
     }
   }
   return wrap;
 }
 
-function renderWriteSlot(v: PlayView): HTMLElement {
-  if (v.state.draft.inkPotIndex === null || v.state.draft.languageRoll === null) {
-    return internalError('Internal error: missing inkPot index or language roll.');
-  }
-  const pair = v.scenario.inkPot[v.state.draft.inkPotIndex];
-  if (!pair) {
-    return internalError('Internal error: ink pot entry missing.');
-  }
+function renderWriteSlot(v: PlayView, d: DraftAt<'WRITE'>): HTMLElement {
   const wrap = document.createElement('div');
-  const word = writtenWord(pair, v.state.draft.languageRoll);
-  const flourishApplied = succeeded(v.state.draft.heartRoll);
+  const word = writtenWord(v.scenario, d.inkPotIndex, d.languageRoll) ?? MISSING_WORD;
   const required =
-    flourishApplied && v.state.draft.flourishAdjective
-      ? `${v.state.draft.flourishAdjective} ${word}`
-      : word;
+    d.flourish && succeeded(d.flourish.heartRoll) ? `${d.flourish.adjective} ${word}` : word;
   const requiredLower = required.toLowerCase();
 
   const chip = document.createElement('p');
@@ -276,13 +267,13 @@ function renderWriteSlot(v: PlayView): HTMLElement {
   ta.className = 'paragraph-area';
   ta.rows = 6;
   ta.placeholder = `Write your paragraph using "${required}".`;
-  ta.value = v.state.draft.text;
+  ta.value = d.text;
   wrap.appendChild(ta);
 
   const indicator = document.createElement('p');
   indicator.className = 'word-indicator';
   const updateIndicator = () => {
-    indicator.textContent = v.state.draft.text.toLowerCase().includes(requiredLower)
+    indicator.textContent = ta.value.toLowerCase().includes(requiredLower)
       ? '✓ the word is set upon the page.'
       : '… the word has not yet been set down.';
   };
@@ -339,9 +330,10 @@ function renderMarginaliaStepCard(v: PlayView): HTMLElement {
   heading.textContent = `Paragraph ${roman} of ${LAST_NUMERAL}`;
   card.appendChild(heading);
 
-  card.appendChild(renderStepper(v.state.draft.phase));
+  const draft = v.state.draft;
+  card.appendChild(renderStepper(draft.phase));
 
-  switch (v.state.draft.phase) {
+  switch (draft.phase) {
     case 'PICK_WORD': {
       const p = document.createElement('p');
       p.className = 'step-instruction';
@@ -350,33 +342,33 @@ function renderMarginaliaStepCard(v: PlayView): HTMLElement {
       break;
     }
     case 'DECIDE_FLOURISH':
-      card.appendChild(renderStepFlourish(v));
+      card.appendChild(renderStepFlourish(v, draft));
       break;
     case 'ROLL_HEART':
-      card.appendChild(renderRollHeartStep(v));
+      card.appendChild(renderRollHeartStep(v, draft));
       break;
     case 'ROLL_LANGUAGE':
-      card.appendChild(renderRollLanguageStep(v));
+      card.appendChild(renderRollLanguageStep(v, draft));
       break;
     case 'WRITE':
       break;
     case 'ROLL_PENMANSHIP':
-      card.appendChild(renderRollPenmanshipStep(v));
+      card.appendChild(renderRollPenmanshipStep(v, draft));
       break;
     case 'PARAGRAPH_DONE':
-      card.appendChild(renderStepDone(v));
+      card.appendChild(renderStepDone(v, draft));
       break;
     default: {
       // Compile-time exhaustiveness: a new PhaseName must be rendered here.
-      const _exhaustive: never = v.state.draft.phase;
-      throw new Error(`Unhandled phase: ${String(_exhaustive)}`);
+      const _exhaustive: never = draft;
+      throw new Error(`Unhandled phase: ${JSON.stringify(_exhaustive)}`);
     }
   }
 
   return card;
 }
 
-function renderStepFlourish(v: PlayView): HTMLElement {
+function renderStepFlourish(v: PlayView, d: DraftAt<'DECIDE_FLOURISH'>): HTMLElement {
   const wrap = document.createElement('div');
   const info = document.createElement('p');
   info.className = 'step-instruction';
@@ -387,7 +379,7 @@ function renderStepFlourish(v: PlayView): HTMLElement {
   const input = document.createElement('input');
   input.type = 'text';
   input.placeholder = 'flourish word (e.g. "solemn")';
-  input.value = v.state.draft.flourishAdjective;
+  input.value = d.flourishAdjective;
   input.className = 'flourish-input';
   input.addEventListener('input', () => {
     v.state.draft = advance(v.state.draft, { type: 'setFlourish', adjective: input.value });
@@ -486,26 +478,26 @@ function renderRollStep(
   return wrap;
 }
 
-function renderRollHeartStep(v: PlayView): HTMLElement {
+function renderRollHeartStep(v: PlayView, d: DraftAt<'ROLL_HEART'>): HTMLElement {
   return renderRollStep(
     v,
     'heart',
-    `to see if the flourish "${v.state.draft.flourishAdjective}" holds.`,
+    `to see if the flourish "${d.flourishAdjective}" holds.`,
     (dice) => {
       v.state.draft = advance(v.state.draft, { type: 'rolled', attribute: 'heart', dice });
     },
   );
 }
 
-function renderRollLanguageStep(v: PlayView): HTMLElement {
+function renderRollLanguageStep(v: PlayView, d: DraftAt<'ROLL_LANGUAGE'>): HTMLElement {
   let verdict: HTMLElement | undefined;
-  if (v.state.draft.heartRoll) {
-    const held = succeeded(v.state.draft.heartRoll);
+  if (d.flourish) {
+    const held = succeeded(d.flourish.heartRoll);
     verdict = makeRollVerdict(
-      v.state.draft.heartRoll,
+      d.flourish.heartRoll,
       held,
       held
-        ? `The flourish "${v.state.draft.flourishAdjective}" holds.`
+        ? `The flourish "${d.flourish.adjective}" holds.`
         : 'The flourish is lost — the word must stand alone.',
     );
   }
@@ -520,17 +512,13 @@ function renderRollLanguageStep(v: PlayView): HTMLElement {
   );
 }
 
-function renderRollPenmanshipStep(v: PlayView): HTMLElement {
-  const pair =
-    v.state.draft.inkPotIndex === null ? undefined : v.scenario.inkPot[v.state.draft.inkPotIndex];
-  if (!pair || v.state.draft.languageRoll === null) {
-    return internalError('Internal error: missing ink pot entry or language roll.');
-  }
-  const superior = succeeded(v.state.draft.languageRoll);
+function renderRollPenmanshipStep(v: PlayView, d: DraftAt<'ROLL_PENMANSHIP'>): HTMLElement {
+  const superior = succeeded(d.languageRoll);
+  const word = writtenWord(v.scenario, d.inkPotIndex, d.languageRoll) ?? MISSING_WORD;
   const verdict = makeRollVerdict(
-    v.state.draft.languageRoll,
+    d.languageRoll,
     superior,
-    superior ? `Superior — write "${pair.superior}".` : `Inferior — "${pair.inferior}" must serve.`,
+    superior ? `Superior — write "${word}".` : `Inferior — "${word}" must serve.`,
   );
   return renderRollStep(
     v,
@@ -543,12 +531,10 @@ function renderRollPenmanshipStep(v: PlayView): HTMLElement {
   );
 }
 
-function renderStepDone(v: PlayView): HTMLElement {
-  const para = draftToParagraph(v.state.draft);
-  const o = para === null ? undefined : paragraphOutcome(para, v.scenario);
-  if (!para || !o || o.word === null) {
-    return internalError('Internal error: missing roll data.');
-  }
+function renderStepDone(v: PlayView, d: DoneDraft): HTMLElement {
+  const para = draftToParagraph(d);
+  const o = paragraphOutcome(para, v.scenario);
+  const word = o.word ?? MISSING_WORD;
   const wrap = document.createElement('div');
   wrap.className = 'done-summary';
 
@@ -563,7 +549,7 @@ function renderStepDone(v: PlayView): HTMLElement {
   const wordLine = document.createElement('p');
   const wordSpan = document.createElement('span');
   wordSpan.className = o.superior ? 'success' : 'failure';
-  wordSpan.textContent = o.superior ? `Superior — "${o.word}."` : `Inferior — "${o.word}" served.`;
+  wordSpan.textContent = o.superior ? `Superior — "${word}."` : `Inferior — "${word}" served.`;
   wordLine.appendChild(wordSpan);
   wrap.appendChild(wordLine);
 
@@ -584,11 +570,11 @@ function renderStepDone(v: PlayView): HTMLElement {
   next.className = 'btn btn--primary';
   next.textContent = isLast ? 'Seal & finish the letter' : 'Next paragraph';
   next.addEventListener('click', () => {
-    const newPara = draftToParagraph(v.state.draft);
-    if (!newPara) return;
-    // Committing replaces the whole screen with a fresh renderPlay, discarding
-    // this closure and its draft — there is no reset to sequence.
-    v.onCommit(newPara);
+    // No event changes a finished draft, so the paragraph previewed above is
+    // the one committed. Committing replaces the whole screen with a fresh
+    // renderPlay, discarding this closure and its draft — there is no reset
+    // to sequence.
+    v.onCommit(para);
   });
   wrap.appendChild(next);
   return wrap;

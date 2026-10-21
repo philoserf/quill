@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1
+
+### Changed
+
+- Browsers now cache the app's script and stylesheet, so a return visit loads faster. Each deploy gives these files new names, so a cached copy is never stale.
+- The downloaded letter's frontmatter now quotes the character and skill names, as it already quoted the scenario title. A name containing a colon can no longer produce invalid YAML, and YAML readers get the same values as before.
+
 ## 0.3.0
 
 ### Changed

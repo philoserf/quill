@@ -67,7 +67,20 @@ The fallback shows the error message and a _Start a new letter_ button. That but
 
 ### 2. Loading the session
 
-`hydrate()` is the first thing `mount()` calls. It loads from the store and then checks the one thing the store cannot: that the session's ids still name a scenario, character and skill that exist in this build.
+`hydrate()` is the first thing `mount()` calls. It loads from the store and then checks the one thing the store cannot: that the session's ids still name a scenario, character and skill that exist in this build. Which ids must resolve is stated once, in `resolve()`, using the three lookups `scenarioById`, `characterById` and `skillById`.
+
+`src/main.ts` — `resolve`
+
+```ts
+function resolve(
+  session: GameSession,
+): { scenario: Scenario; character: Character; skill: Skill } | null {
+  const scenario = scenarioById(session.scenarioId);
+  const character = characterById(session.characterId);
+  const skill = skillById(session.skillId);
+  return scenario && character && skill ? { scenario, character, skill } : null;
+}
+```
 
 `src/main.ts` — `hydrate`
 
@@ -75,11 +88,7 @@ The fallback shows the error message and a _Start a new letter_ button. That but
 function hydrate(): GameSession | null {
   const session = load();
   if (!session) return null;
-  const known =
-    SCENARIOS.some((s) => s.id === session.scenarioId) &&
-    characterById(session.characterId) !== undefined &&
-    skillById(session.skillId) !== undefined;
-  if (!known) {
+  if (!resolve(session)) {
     // Set aside, not delete: a deploy that renamed an id must not erase the
     // letter (#100).
     discard();
@@ -178,7 +187,7 @@ With the session in hand, `mount()` defines how it changes. Persisting and repai
 
 `save()` returns `false` instead of throwing when the browser refuses the write, and `save(null)` removes the key. A refused write is warned about once per page and otherwise ignored: the game carries on in memory.
 
-`render()` empties the root and picks a screen. `null` means Setup. Otherwise the session's three ids are resolved — `hydrate()` has already proven they resolve, so the throw that follows is a type narrowing rather than a reachable branch — and `status` chooses between Play and Score.
+`render()` empties the root and picks a screen. `null` means Setup. Otherwise the session's three ids are resolved through the same `resolve()` — `hydrate()` has already proven they resolve, so the throw that follows is a type narrowing rather than a reachable branch — and `status` chooses between Play and Score.
 
 `src/main.ts` — `render`
 
@@ -233,14 +242,17 @@ _Begin the letter_ calls `onBegin`, which `main.ts` turns into a fresh `GameSess
 
 ### 5. The Play screen and its draft
 
-`renderPlay` is called once per paragraph. `main.ts` rebuilds it after every commit, so each call starts with an empty draft and there is no reset to sequence.
+`renderPlay` is called once per paragraph. `main.ts` rebuilds it after every commit, so each call starts with an empty draft and there is no reset to sequence. The draft is created knowing which attribute, if any, the letter's skill can still boost; that is the only place the screen reads the session's skill latch.
 
 `src/screens/play.ts` — `renderPlay`
 
 ```ts
   const v: PlayView = {
     ...ctx,
-    state: { draft: emptyDraft(), recallOpen: false },
+    state: {
+      draft: emptyDraft(ctx.session.skillSpent ? null : ctx.skill.bonusAttribute),
+      recallOpen: false,
+    },
     repaint,
   };
 
@@ -258,7 +270,23 @@ The layout is a header with five Roman-numeral medallions, then three columns: t
 
 ### 6. The paragraph machine
 
-The draft's phase order lives in `src/paragraph.ts`, not in the screen. A `Draft` holds the phase and every field a paragraph collects on the way; `advance(draft, event)` is the only function that produces a new one.
+The draft's phase order lives in `src/paragraph.ts`, not in the screen. A `Draft` is a union discriminated on `phase`: each phase carries exactly the fields it has earned, so code handed one phase cannot find a roll missing that the order guarantees is there. `advance(draft, event)` is the only function that produces a new one.
+
+`src/paragraph.ts` — `Draft`
+
+```ts
+export type Draft =
+  | (DraftBase & { phase: 'PICK_WORD' })
+  // The word being typed; trimmed and checked only when it is attempted.
+  | (Worded & { phase: 'DECIDE_FLOURISH'; flourishAdjective: string })
+  | (Worded & { phase: 'ROLL_HEART'; flourishAdjective: string })
+  | (Resolved & { phase: 'ROLL_LANGUAGE' })
+  | (Written & { phase: 'WRITE' })
+  | (Written & { phase: 'ROLL_PENMANSHIP' })
+  | DoneDraft;
+```
+
+The variants are built from nested shapes so no field is declared twice: `DraftBase` holds the skill (`spendable`, the attribute the letter's skill can still boost, and `skillUsedHere`), `Worded` adds the ink-pot index, `Resolved` adds `flourish` — the adjective and its Heart roll together, or `null` for a paragraph written plainly — and `Written` adds the Language roll and the prose. `PhaseName` is derived from the union, and `DraftAt<P>` names one phase's variant for the render functions in section 7.
 
 `src/paragraph.ts` — `DraftEvent`
 
@@ -276,7 +304,7 @@ export type DraftEvent =
 
 Each event carries the data its transition records, so a phase change and the field it fills happen in one place. An event that does not belong to the current phase returns the draft unchanged — the screen relies on that identity, as section 7 shows.
 
-The one branching phase is `DECIDE_FLOURISH`. Attempting a flourish requires a non-blank word and trims it once, here, so the phrase the write step later asks for is exactly the phrase the player typed.
+The one branching phase is `DECIDE_FLOURISH`. Attempting a flourish requires a non-blank word and trims it once, here, so the phrase the write step later asks for is exactly the phrase the player typed. Writing plainly builds the next variant field by field, so a word typed but never attempted is dropped rather than carried along.
 
 `src/paragraph.ts` — `advance`
 
@@ -287,11 +315,15 @@ The one branching phase is `DECIDE_FLOURISH`. Attempting a flourish requires a n
       if (!adjective) return draft;
       return { ...draft, flourishAdjective: adjective, phase: 'ROLL_HEART' };
     }
-
-    case 'writePlainly':
+...
+    case 'writePlainly': {
       if (draft.phase !== 'DECIDE_FLOURISH') return draft;
-      return { ...draft, flourishAdjective: '', phase: 'ROLL_LANGUAGE' };
+      const { spendable, skillUsedHere, inkPotIndex } = draft;
+      return { phase: 'ROLL_LANGUAGE', spendable, skillUsedHere, inkPotIndex, flourish: null };
+    }
 ```
+
+The skill is guarded here too. `spendSkill` is refused unless its attribute is the draft's `spendable`, the phase is that attribute's roll, and nothing has been spent this paragraph — so once per letter, on the skill's own attribute, is a rule of the machine rather than of which buttons the screen draws.
 
 The following is a transcript of a script run while writing this document, driving `advance` with a mix of valid and out-of-order events and then mapping the result with `draftToParagraph`. Nothing re-runs it.
 
@@ -311,25 +343,23 @@ ROLL_PENMANSHIP  {"type":"rolled","attribute":"penmanship","dice":[6,1]}        
 
 The Language roll offered before a word was picked is ignored, as is the attempt with no word. The padded `"  solemn "` reaches the record trimmed.
 
-`draftToParagraph` is the single mapping from a draft to the stored `Paragraph`. It returns `null` until the three always-required pieces exist. The Heart roll is the record of whether a flourish was attempted, and the word follows it, so the two cannot disagree in a stored letter.
+`draftToParagraph` is the single mapping from a draft to the stored `Paragraph`. It accepts only the finished variant, so it always returns one. The Heart roll is the record of whether a flourish was attempted, and the draft keeps the word and the roll in one `flourish` field, so the two cannot disagree in a stored letter.
 
 `src/paragraph.ts` — `draftToParagraph`
 
 ```ts
-export function draftToParagraph(d: Draft): Paragraph | null {
-  if (d.inkPotIndex === null || d.languageRoll === null || d.penmanshipRoll === null) return null;
+export function draftToParagraph(d: DoneDraft): Paragraph {
   return {
     inkPotIndex: d.inkPotIndex,
-    // The Heart roll is the record of an attempt (#66); the word follows it,
-    // so the two cannot disagree. advance() already trimmed it (#116).
-    flourishAdjective: d.heartRoll !== null ? d.flourishAdjective : null,
+    flourishAdjective: d.flourish?.adjective ?? null,
+    heartRoll: d.flourish?.heartRoll ?? null,
 ```
 
 `text` is not required: an empty paragraph can be committed, and every place that shows prose goes through `paragraphProse`, which trims and substitutes _(empty paragraph)_ for blank or whitespace-only text.
 
 ### 7. Playing a paragraph, phase by phase
 
-Two switches in the screen follow the phase — `renderLetterDraftSlot` for the middle column and `renderMarginaliaStepCard` for the right — and both end in a `never` default, so adding a phase to `PhaseName` fails to compile until both render it.
+Two switches in the screen follow the phase — `renderLetterDraftSlot` for the middle column and `renderMarginaliaStepCard` for the right — and both end in a `never` default, so adding a phase to the `Draft` union fails to compile until both render it. Each case hands its step renderer the narrowed variant, `DraftAt<'WRITE'>` and so on, so a renderer reads the rolls its phase guarantees without checking for them.
 
 **Pick a word.** The ink pot lists every entry's inferior word. Entries already used by a committed paragraph are disabled and annotated with whether they came out superior or inferior; during `PICK_WORD` the rest are buttons that send `pickWord`. Since a word serves only one paragraph, a scenario needs at least five entries — `tests/scenarios.test.ts` enforces that, because fewer would leave the player with nothing to click.
 
@@ -364,7 +394,7 @@ _Write plainly_ sends `writePlainly`, which skips the Heart roll altogether.
       }
 ```
 
-The skill is the letter's single once-only bonus. The screen offers _Spend …_ only when the session has not spent it and the skill's `bonusAttribute` matches this roll; pressing it sends `spendSkill`, which `advance` records as `skillUsedHere` and repaints so the dice count includes the extra die. The session's `skillSpent` flag does not change until the paragraph is committed, so the reference card reads both to show _spent_ in between.
+The skill is the letter's single once-only bonus. The screen offers _Spend …_ only when the draft's `spendable` is this roll's attribute and nothing has been spent this paragraph. Pressing it sends `spendSkill`, which `advance` records as `skillUsedHere`, and the repaint makes the dice count include the extra die. The session's `skillSpent` flag does not change until the paragraph is committed, so the reference card reads the draft to show _spent_ in between.
 
 The roll button shakes for 250 ms before rolling. The timer checks that its button is still in the document: if a repaint replaced the subtree during the shake, this button's dice plan is stale and the freshly rendered button is the one to use.
 
@@ -406,25 +436,20 @@ export function succeeded(dice: number[] | null): boolean {
 
 The Language step shows the Heart verdict above its own button, and the Penmanship step shows the Language verdict, so each roll's outcome stays on screen while the next is made.
 
-**Write.** The Language roll decides the word — superior on success, inferior otherwise — and a held flourish is prefixed to it. The write slot shows that phrase and a textarea.
+**Write.** The Language roll decides the word — superior on success, inferior otherwise — and a held flourish is prefixed to it. `writtenWord` in `scoring.ts` makes that choice, and holds the app's only lookup into a scenario's ink pot; an index that no longer resolves shows as `—`, as on the Score screen and in the export. The write slot shows the phrase and a textarea.
 
 `src/screens/play.ts` — `renderWriteSlot`
 
 ```ts
-  const word = succeeded(v.state.draft.languageRoll) ? pair.superior : pair.inferior;
-  const flourishApplied = succeeded(v.state.draft.heartRoll);
+  const word = writtenWord(v.scenario, d.inkPotIndex, d.languageRoll) ?? MISSING_WORD;
   const required =
-    flourishApplied && v.state.draft.flourishAdjective
-      ? `${v.state.draft.flourishAdjective} ${word}`
-      : word;
+    d.flourish && succeeded(d.flourish.heartRoll) ? `${d.flourish.adjective} ${word}` : word;
   const requiredLower = required.toLowerCase();
 ```
 
 Typing sends `setText` and updates a case-insensitive indicator saying whether the phrase appears, without repainting — the textarea already shows the text, and a repaint would lose the cursor. The indicator is advisory: _Finish paragraph_ sends `finishParagraph` whether or not the phrase is present.
 
-`renderWriteSlot`, `renderRollPenmanshipStep` and `renderStepDone` each open with an _Internal error_ return for a draft missing its word or a roll. `advance` cannot reach `WRITE`, `ROLL_PENMANSHIP` or `PARAGRAPH_DONE` without the fields those phases read, and the index comes from a button in the ink-pot list, so these returns exist to narrow `number | null` for the compiler rather than for an input the player can produce.
-
-**Roll Penmanship, then done.** Penmanship is the last roll, made after writing. `PARAGRAPH_DONE` builds the paragraph with `draftToParagraph` and shows the verdicts and the points it would earn. The button — _Next paragraph_, or _Seal & finish the letter_ on the fifth — builds it again and hands it to `onCommit`. Both calls go through the same mapping, so the previewed points cannot drift from the recorded ones.
+**Roll Penmanship, then done.** Penmanship is the last roll, made after writing. `PARAGRAPH_DONE` builds the paragraph with `draftToParagraph`, reads it through `paragraphOutcome` (section 9), and shows the verdicts and the points it would earn. The button — _Next paragraph_, or _Seal & finish the letter_ on the fifth — hands that same paragraph to `onCommit`. No event changes a finished draft, so the previewed points are the recorded ones.
 
 ### 8. Committing a paragraph
 
@@ -501,17 +526,37 @@ null   [6]      [6]         2
 
 A flourish attempted and lost scores exactly like writing plainly; only a held flourish changes the outcome. The best possible letter scores 15.
 
+Points are one of the things a paragraph's dice mean. `paragraphOutcome` collects all of them in one reading, which every view of a committed paragraph goes through: the play screen's ink pot and done step, the Score screen's breakdown, and the export's table.
+
+`src/scoring.ts` — `ParagraphOutcome`
+
+```ts
+export interface ParagraphOutcome {
+  /** null when `inkPotIndex` no longer resolves against the scenario. */
+  word: string | null;
+  superior: boolean;
+  /** null when the player wrote plainly. */
+  flourish: { word: string; held: boolean } | null;
+  fineHand: boolean;
+  points: number;
+}
+```
+
+The outcome reports a lost flourish as well as a held one, and each consumer chooses what to print.
+
 ### 10. The Score screen
 
 `renderScore` calls `score(session)` once and builds four parts: a seal with the total, tier name and the scenario's consequence; the finished letter with its letterhead and signature; a per-paragraph breakdown table; and two buttons.
 
-The breakdown resolves each word from the ink pot, renders a missing entry as a dash, and reports the flourish in one of three ways — held, lost, or absent — keyed off whether the stored word is `null`, which since `draftToParagraph` ties it to the Heart roll means whether a flourish was attempted.
+The breakdown reads each paragraph through `paragraphOutcome`, renders a missing word as a dash, and reports the flourish in one of three ways — held, lost, or absent.
 
 `src/screens/score.ts` — `renderScore`
 
 ```ts
-    if (flourish !== null) {
-      word += succeeded(p.heartRoll) ? ` + "${flourish}"` : ' — flourish lost';
+    const o = paragraphOutcome(p, ctx.scenario);
+    let word = o.word === null ? '—' : `"${o.word}" (${o.superior ? 'superior' : 'inferior'})`;
+    if (o.flourish) {
+      word += o.flourish.held ? ` + "${o.flourish.word}"` : ' — flourish lost';
     }
 ```
 
@@ -523,7 +568,7 @@ The letterhead, built by `renderLetterhead` in `fragments.ts`, formats `startedA
 
 _Download letter (.md)_ calls `toMarkdown`, wraps the result in a `Blob`, and clicks a temporary link. The filename uses the UTC date from `startedAt` and the scenario id. The object URL is revoked on the next turn of the event loop rather than immediately, because revoking it synchronously races the download in some browsers.
 
-`toMarkdown` writes YAML frontmatter, the five paragraphs through `paragraphProse`, and a game-record table. The scenario title is quoted as a YAML scalar; every cell built from player-controlled or content text goes through `escapeCell`.
+`toMarkdown` writes YAML frontmatter, the five paragraphs through `paragraphProse`, and a game-record table. The character name, skill name and scenario title are quoted as YAML scalars; every cell built from player-controlled or content text goes through `escapeCell`.
 
 `src/export.ts` — `escapeCell`
 
@@ -537,7 +582,7 @@ Backslashes are escaped first, so a typed `\|` becomes `\\\|` — an escaped bac
 
 ### 12. Building and deploying
 
-`bun run dev` serves `public/index.html` directly; Bun's HTML bundler follows the module script and the stylesheet. `bun run build` deletes `dist/` and bundles the same HTML into it, because `bun build` never cleans its output directory and old hashed bundles would otherwise ship.
+`bun run dev` serves `public/index.html` directly; Bun's HTML bundler follows the module script and the stylesheet. `bun run build` deletes `dist/` and bundles the same HTML into it, because `bun build` never cleans its output directory and old hashed bundles would otherwise ship. It then copies `public/_headers` into `dist/`. That file marks every `.js` and `.css` file as immutable for a year, which is safe because the bundler hashes each file's name, so a changed file is a new URL.
 
 `wrangler.jsonc` publishes `dist/` as the static assets of a Worker named `quill` on the custom domain `quill.philoserf.com`. `task deploy` runs `check:ci`, builds, picks up a Cloudflare API token from the login keychain if one is there, and runs `bunx wrangler deploy`. There is no CI: pushing runs `check:ci` through a pre-push hook and deploys nothing.
 

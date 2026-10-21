@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { score, tierFor } from '../src/scoring';
+import { paragraphOutcome, score, tierFor, writtenWord } from '../src/scoring';
 import type { GameSession, Paragraph, TierName } from '../src/types';
+import { scenarioFixture } from './helpers';
 
 function para(overrides: Partial<Paragraph>): Paragraph {
   return {
@@ -134,5 +135,60 @@ describe('tierFor', () => {
   ];
   test.each(cases)('tierFor(%i) is %s', (total, name) => {
     expect(tierFor(total)).toBe(name);
+  });
+});
+
+describe('writtenWord', () => {
+  const pair = { inferior: 'Town', superior: 'Riverton' };
+
+  test('a successful Language roll writes the superior word', () => {
+    expect(writtenWord(pair, [2, 5])).toBe('Riverton');
+  });
+
+  test('a failed Language roll writes the inferior word', () => {
+    expect(writtenWord(pair, [2, 4])).toBe('Town');
+  });
+});
+
+describe('paragraphOutcome', () => {
+  const scenario = scenarioFixture({ inkPot: [{ inferior: 'Town', superior: 'Riverton' }] });
+
+  test('a plain paragraph has no flourish', () => {
+    const o = paragraphOutcome(para({ languageRoll: [6], penmanshipRoll: [1] }), scenario);
+    expect(o).toEqual({
+      word: 'Riverton',
+      superior: true,
+      flourish: null,
+      fineHand: false,
+      points: 1,
+    });
+  });
+
+  test('a flourish whose Heart roll held is reported as held', () => {
+    const o = paragraphOutcome(
+      para({ flourishAdjective: 'grey', heartRoll: [5], languageRoll: [6], penmanshipRoll: [6] }),
+      scenario,
+    );
+    expect(o.flourish).toEqual({ word: 'grey', held: true });
+    expect(o.fineHand).toBe(true);
+    expect(o.points).toBe(3);
+  });
+
+  test('a flourish whose Heart roll failed is reported as lost, not dropped', () => {
+    const o = paragraphOutcome(
+      para({ flourishAdjective: 'grey', heartRoll: [2], languageRoll: [1] }),
+      scenario,
+    );
+    expect(o.flourish).toEqual({ word: 'grey', held: false });
+    expect(o.word).toBe('Town');
+    expect(o.superior).toBe(false);
+    expect(o.points).toBe(0);
+  });
+
+  test('an index that no longer resolves has no word but still scores', () => {
+    const o = paragraphOutcome(para({ inkPotIndex: 9, languageRoll: [5] }), scenario);
+    expect(o.word).toBeNull();
+    expect(o.superior).toBe(true);
+    expect(o.points).toBe(1);
   });
 });

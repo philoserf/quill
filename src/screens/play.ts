@@ -9,7 +9,7 @@ import {
   STEP_INDEX,
 } from '../paragraph';
 import { applyReroll, planRoll } from '../rules';
-import { formatSignedPoints, paragraphPoints } from '../scoring';
+import { formatSignedPoints, paragraphOutcome, score, writtenWord } from '../scoring';
 import type { Attribute, Character, GameSession, Paragraph, Scenario, Skill } from '../types';
 import { PARAGRAPHS_PER_LETTER } from '../types';
 import { renderLetterhead, renderScenarioDetail } from './fragments';
@@ -174,7 +174,7 @@ function renderInkPotCard(v: PlayView): HTMLElement {
       btn.append(
         entry.inferior,
         ' ',
-        smallCaps(succeeded(used.languageRoll) ? '→ superior' : '→ inferior'),
+        smallCaps(paragraphOutcome(used, v.scenario).superior ? '→ superior' : '→ inferior'),
       );
     } else if (chosen) {
       btn.classList.add('inkpot-item--chosen');
@@ -263,7 +263,7 @@ function renderWriteSlot(v: PlayView): HTMLElement {
     return internalError('Internal error: ink pot entry missing.');
   }
   const wrap = document.createElement('div');
-  const word = succeeded(v.state.draft.languageRoll) ? pair.superior : pair.inferior;
+  const word = writtenWord(pair, v.state.draft.languageRoll);
   const flourishApplied = succeeded(v.state.draft.heartRoll);
   const required =
     flourishApplied && v.state.draft.flourishAdjective
@@ -549,43 +549,37 @@ function renderRollPenmanshipStep(v: PlayView): HTMLElement {
 
 function renderStepDone(v: PlayView): HTMLElement {
   const para = draftToParagraph(v.state.draft);
-  const pair = para === null ? undefined : v.scenario.inkPot[para.inkPotIndex];
-  if (!para || !pair) {
+  const o = para === null ? undefined : paragraphOutcome(para, v.scenario);
+  if (!para || !o || o.word === null) {
     return internalError('Internal error: missing roll data.');
   }
   const wrap = document.createElement('div');
   wrap.className = 'done-summary';
-  const superior = succeeded(para.languageRoll);
-  const flourishApplied = succeeded(para.heartRoll);
-  const penOk = succeeded(para.penmanshipRoll);
-  const pts = paragraphPoints(para);
 
   const penLine = document.createElement('p');
   penLine.append(renderDiceRow(para.penmanshipRoll), ' ');
   const penLabel = document.createElement('span');
-  penLabel.className = penOk ? 'success' : 'failure';
-  penLabel.textContent = penOk ? 'A fine hand — +1 point.' : 'A plain hand — no bonus.';
+  penLabel.className = o.fineHand ? 'success' : 'failure';
+  penLabel.textContent = o.fineHand ? 'A fine hand — +1 point.' : 'A plain hand — no bonus.';
   penLine.appendChild(penLabel);
   wrap.appendChild(penLine);
 
   const wordLine = document.createElement('p');
   const wordSpan = document.createElement('span');
-  wordSpan.className = superior ? 'success' : 'failure';
-  wordSpan.textContent = superior
-    ? `Superior — "${pair.superior}."`
-    : `Inferior — "${pair.inferior}" served.`;
+  wordSpan.className = o.superior ? 'success' : 'failure';
+  wordSpan.textContent = o.superior ? `Superior — "${o.word}."` : `Inferior — "${o.word}" served.`;
   wordLine.appendChild(wordSpan);
   wrap.appendChild(wordLine);
 
-  if (flourishApplied) {
+  if (o.flourish?.held) {
     const flourishLine = document.createElement('p');
-    flourishLine.textContent = `With the flourish "${v.state.draft.flourishAdjective}."`;
+    flourishLine.textContent = `With the flourish "${o.flourish.word}."`;
     wrap.appendChild(flourishLine);
   }
 
   const ptsLine = document.createElement('p');
   ptsLine.className = 'done-points';
-  ptsLine.textContent = `${formatSignedPoints(pts)} points this paragraph`;
+  ptsLine.textContent = `${formatSignedPoints(o.points)} points this paragraph`;
   wrap.appendChild(ptsLine);
 
   const isLast = v.session.paragraphs.length === PARAGRAPHS_PER_LETTER - 1;
@@ -623,7 +617,7 @@ function renderMarginaliaReferenceCard(v: PlayView): HTMLElement {
   charLine.appendChild(skillNote);
   card.appendChild(charLine);
 
-  const total = v.session.paragraphs.reduce((acc, p) => acc + paragraphPoints(p), 0);
+  const { total } = score(v.session);
   const scoreLine = document.createElement('p');
   scoreLine.className = 'running-score';
   const strong = document.createElement('strong');

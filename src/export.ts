@@ -1,6 +1,5 @@
-import { succeeded } from './dice';
 import { paragraphProse } from './paragraph';
-import { score } from './scoring';
+import { paragraphOutcome, score } from './scoring';
 import type { Character, GameSession, Paragraph, Scenario, Skill } from './types';
 
 const EMDASH = '—';
@@ -24,18 +23,14 @@ function rollCell(values: number[] | null): string {
   return values && values.length > 0 ? values.join(',') : EMDASH;
 }
 
-function paragraphRow(p: Paragraph, idx: number, scenario: Scenario, points: number): string {
-  const pair = scenario.inkPot[p.inkPotIndex];
-  const word = pair
-    ? succeeded(p.languageRoll)
-      ? `${escapeCell(pair.superior)} (superior)`
-      : `${escapeCell(pair.inferior)} (inferior)`
-    : EMDASH;
+function paragraphRow(p: Paragraph, idx: number, scenario: Scenario): string {
+  const o = paragraphOutcome(p, scenario);
+  const word =
+    o.word === null ? EMDASH : `${escapeCell(o.word)} (${o.superior ? 'superior' : 'inferior'})`;
   // Only a flourish that held is reported — an attempt whose Heart roll failed
   // earns nothing and is not shown, matching the play screen's done summary.
-  const flourish =
-    succeeded(p.heartRoll) && p.flourishAdjective ? escapeCell(p.flourishAdjective) : EMDASH;
-  return `| ${idx + 1} | ${word} | ${flourish} | ${rollCell(p.heartRoll)} | ${rollCell(p.languageRoll)} | ${rollCell(p.penmanshipRoll)} | ${points} |`;
+  const flourish = o.flourish?.held && o.flourish.word ? escapeCell(o.flourish.word) : EMDASH;
+  return `| ${idx + 1} | ${word} | ${flourish} | ${rollCell(p.heartRoll)} | ${rollCell(p.languageRoll)} | ${rollCell(p.penmanshipRoll)} | ${o.points} |`;
 }
 
 export function toMarkdown(
@@ -63,9 +58,7 @@ export function toMarkdown(
 
   const tableHeader =
     '| # | Word | Flourish | Heart | Language | Penmanship | Points |\n| --- | --- | --- | --- | --- | --- | --- |';
-  const tableRows = session.paragraphs
-    .map((p, i) => paragraphRow(p, i, scenario, result.paragraphs[i] ?? 0))
-    .join('\n');
+  const tableRows = session.paragraphs.map((p, i) => paragraphRow(p, i, scenario)).join('\n');
 
   const footer = [
     '',

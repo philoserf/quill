@@ -1,7 +1,6 @@
-import { succeeded } from '../dice';
 import { toMarkdown } from '../export';
 import { paragraphProse } from '../paragraph';
-import { formatSignedPoints, score } from '../scoring';
+import { formatSignedPoints, paragraphOutcome, score } from '../scoring';
 import type { Character, GameSession, Scenario, Skill } from '../types';
 import { renderLetterhead } from './fragments';
 
@@ -77,20 +76,15 @@ export function renderScore(ctx: ScoreCtx): HTMLElement {
   table.appendChild(thead);
   const tbody = document.createElement('tbody');
   for (const [i, p] of ctx.session.paragraphs.entries()) {
-    const pair = ctx.scenario.inkPot[p.inkPotIndex];
-    const sup = succeeded(p.languageRoll);
-    const flourish = p.flourishAdjective;
-    let word = pair
-      ? `"${sup ? pair.superior : pair.inferior}" (${sup ? 'superior' : 'inferior'})`
-      : '—';
-    if (flourish !== null) {
-      word += succeeded(p.heartRoll) ? ` + "${flourish}"` : ' — flourish lost';
+    const o = paragraphOutcome(p, ctx.scenario);
+    let word = o.word === null ? '—' : `"${o.word}" (${o.superior ? 'superior' : 'inferior'})`;
+    if (o.flourish) {
+      word += o.flourish.held ? ` + "${o.flourish.word}"` : ' — flourish lost';
     }
-    const penOk = succeeded(p.penmanshipRoll);
-    const hand = penOk ? 'Fine hand' : 'Plain hand';
+    const hand = o.fineHand ? 'Fine hand' : 'Plain hand';
 
     const row = document.createElement('tr');
-    for (const cell of [String(i + 1), word, hand, formatSignedPoints(result.paragraphs[i] ?? 0)]) {
+    for (const cell of [String(i + 1), word, hand, formatSignedPoints(o.points)]) {
       const td = document.createElement('td');
       td.textContent = cell;
       row.appendChild(td);

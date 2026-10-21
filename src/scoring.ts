@@ -1,5 +1,5 @@
 import { succeeded } from './dice';
-import type { GameSession, Paragraph, TierName } from './types';
+import type { GameSession, InkPotEntry, Paragraph, Scenario, TierName } from './types';
 import { LOWEST_TIER, TIERS } from './types';
 
 export interface ScoreResult {
@@ -24,6 +24,38 @@ export function paragraphPoints(p: Paragraph): number {
 
   if (succeeded(p.penmanshipRoll)) pts += 1;
   return pts;
+}
+
+/** The word the Language roll lets the player write. */
+export function writtenWord(pair: InkPotEntry, languageRoll: number[]): string {
+  return succeeded(languageRoll) ? pair.superior : pair.inferior;
+}
+
+/** What a committed paragraph's dice mean — the one reading every view of a
+ *  paragraph shares. Each consumer still chooses what to print: the Score
+ *  screen reports a lost flourish, the export does not. */
+export interface ParagraphOutcome {
+  /** null when `inkPotIndex` no longer resolves against the scenario. */
+  word: string | null;
+  superior: boolean;
+  /** null when the player wrote plainly. */
+  flourish: { word: string; held: boolean } | null;
+  fineHand: boolean;
+  points: number;
+}
+
+export function paragraphOutcome(p: Paragraph, scenario: Scenario): ParagraphOutcome {
+  const pair = scenario.inkPot[p.inkPotIndex];
+  return {
+    word: pair ? writtenWord(pair, p.languageRoll) : null,
+    superior: succeeded(p.languageRoll),
+    flourish:
+      p.flourishAdjective === null
+        ? null
+        : { word: p.flourishAdjective, held: succeeded(p.heartRoll) },
+    fineHand: succeeded(p.penmanshipRoll),
+    points: paragraphPoints(p),
+  };
 }
 
 export function tierFor(total: number): TierName {

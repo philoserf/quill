@@ -139,14 +139,18 @@ describe('tierFor', () => {
 });
 
 describe('writtenWord', () => {
-  const pair = { inferior: 'Town', superior: 'Riverton' };
+  const scenario = scenarioFixture({ inkPot: [{ inferior: 'Town', superior: 'Riverton' }] });
 
   test('a successful Language roll writes the superior word', () => {
-    expect(writtenWord(pair, [2, 5])).toBe('Riverton');
+    expect(writtenWord(scenario, 0, [2, 5])).toBe('Riverton');
   });
 
   test('a failed Language roll writes the inferior word', () => {
-    expect(writtenWord(pair, [2, 4])).toBe('Town');
+    expect(writtenWord(scenario, 0, [2, 4])).toBe('Town');
+  });
+
+  test('an index that no longer resolves has no word', () => {
+    expect(writtenWord(scenario, 1, [5])).toBeNull();
   });
 });
 

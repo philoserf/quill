@@ -44,7 +44,7 @@ describe('advance', () => {
   // in seven pairs of adjacent lines inside DOM-construction functions, where
   // reordering them changed the game and nothing failed.
   test('the flourish path runs PICK_WORD → … → PARAGRAPH_DONE in order', () => {
-    let d = emptyDraft();
+    let d = emptyDraft(null);
     const phases = [d.phase];
 
     d = advance(d, { type: 'pickWord', inkPotIndex: 2 });
@@ -73,14 +73,14 @@ describe('advance', () => {
   });
 
   test('the plain path skips ROLL_HEART', () => {
-    let d = advance(emptyDraft(), { type: 'pickWord', inkPotIndex: 0 });
+    let d = advance(emptyDraft(null), { type: 'pickWord', inkPotIndex: 0 });
     d = advance(d, { type: 'writePlainly' });
     expect(d.phase).toBe('ROLL_LANGUAGE');
     expect(d.heartRoll).toBeNull();
   });
 
   test('writePlainly discards a flourish word already typed', () => {
-    let d = advance(emptyDraft(), { type: 'pickWord', inkPotIndex: 0 });
+    let d = advance(emptyDraft(null), { type: 'pickWord', inkPotIndex: 0 });
     d = advance(d, { type: 'setFlourish', adjective: 'sombre' });
     d = advance(d, { type: 'writePlainly' });
     expect(d.flourishAdjective).toBe('');
@@ -90,7 +90,7 @@ describe('advance', () => {
   // makes "you cannot roll Language before Heart" a property of the table
   // rather than of two lines happening to sit next to each other.
   test('each roll lands its dice on the matching field', () => {
-    let d = advance(emptyDraft(), { type: 'pickWord', inkPotIndex: 0 });
+    let d = advance(emptyDraft(null), { type: 'pickWord', inkPotIndex: 0 });
     d = advance(d, { type: 'setFlourish', adjective: 'grand' });
     d = advance(d, { type: 'attemptFlourish' });
     d = advance(d, { type: 'rolled', attribute: 'heart', dice: [6, 1] });
@@ -103,11 +103,11 @@ describe('advance', () => {
   });
 
   test('pickWord records the chosen index', () => {
-    expect(advance(emptyDraft(), { type: 'pickWord', inkPotIndex: 7 }).inkPotIndex).toBe(7);
+    expect(advance(emptyDraft(null), { type: 'pickWord', inkPotIndex: 7 }).inkPotIndex).toBe(7);
   });
 
   test('an event from the wrong phase leaves the draft untouched', () => {
-    const d = emptyDraft();
+    const d = emptyDraft('heart');
     // Rolling Language while still at PICK_WORD would otherwise skip the word
     // and the flourish decision entirely.
     expect(advance(d, { type: 'rolled', attribute: 'language', dice: [6] })).toEqual(d);
@@ -119,7 +119,7 @@ describe('advance', () => {
   });
 
   test('a blank flourish cannot be attempted (#108)', () => {
-    let d = advance(emptyDraft(), { type: 'pickWord', inkPotIndex: 0 });
+    let d = advance(emptyDraft(null), { type: 'pickWord', inkPotIndex: 0 });
     d = advance(d, { type: 'setFlourish', adjective: '   ' });
     // Same object back: the screen uses that to know it was refused.
     expect(advance(d, { type: 'attemptFlourish' })).toBe(d);
@@ -130,7 +130,7 @@ describe('advance', () => {
   });
 
   test('an attempted flourish is stored trimmed (#107)', () => {
-    let d = advance(emptyDraft(), { type: 'pickWord', inkPotIndex: 0 });
+    let d = advance(emptyDraft(null), { type: 'pickWord', inkPotIndex: 0 });
     d = advance(d, { type: 'setFlourish', adjective: ' solemn ' });
     d = advance(d, { type: 'attemptFlourish' });
     expect(d.phase).toBe('ROLL_HEART');
@@ -138,7 +138,7 @@ describe('advance', () => {
   });
 
   test('the skill is spent once, on the roll the current phase is waiting for', () => {
-    let d = advance(emptyDraft(), { type: 'pickWord', inkPotIndex: 0 });
+    let d = advance(emptyDraft('language'), { type: 'pickWord', inkPotIndex: 0 });
     d = advance(d, { type: 'writePlainly' });
     expect(advance(d, { type: 'spendSkill', attribute: 'penmanship' })).toBe(d);
     d = advance(d, { type: 'spendSkill', attribute: 'language' });
@@ -150,8 +150,20 @@ describe('advance', () => {
     );
   });
 
+  test('the skill cannot boost an attribute other than its own (#124)', () => {
+    let d = advance(emptyDraft('penmanship'), { type: 'pickWord', inkPotIndex: 0 });
+    d = advance(d, { type: 'writePlainly' });
+    expect(advance(d, { type: 'spendSkill', attribute: 'language' })).toBe(d);
+  });
+
+  test('a skill already spent this letter cannot be spent again (#124)', () => {
+    let d = advance(emptyDraft(null), { type: 'pickWord', inkPotIndex: 0 });
+    d = advance(d, { type: 'writePlainly' });
+    expect(advance(d, { type: 'spendSkill', attribute: 'language' })).toBe(d);
+  });
+
   test('prose is recorded only while writing', () => {
-    let d = advance(emptyDraft(), { type: 'pickWord', inkPotIndex: 0 });
+    let d = advance(emptyDraft(null), { type: 'pickWord', inkPotIndex: 0 });
     d = advance(d, { type: 'writePlainly' });
     d = advance(d, { type: 'rolled', attribute: 'language', dice: [5] });
     d = advance(d, { type: 'setText', text: 'Dear Archduke,' });
@@ -161,7 +173,7 @@ describe('advance', () => {
   });
 
   test('does not mutate the draft it is given', () => {
-    const d = emptyDraft();
+    const d = emptyDraft(null);
     advance(d, { type: 'pickWord', inkPotIndex: 3 });
     expect(d.inkPotIndex).toBeNull();
     expect(d.phase).toBe('PICK_WORD');
@@ -191,7 +203,7 @@ describe('STEP_INDEX', () => {
 describe('draftToParagraph', () => {
   function complete(): Draft {
     return {
-      ...emptyDraft(),
+      ...emptyDraft(null),
       phase: 'PARAGRAPH_DONE',
       inkPotIndex: 1,
       languageRoll: [5],

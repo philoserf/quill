@@ -29,10 +29,13 @@ export interface Draft {
   languageRoll: number[] | null;
   penmanshipRoll: number[] | null;
   text: string;
+  /** The attribute the letter's skill can still boost, or null once it is
+   *  spent. Fixed for the paragraph: the session's latch only moves on commit. */
+  spendable: Attribute | null;
   skillUsedHere: Attribute | null;
 }
 
-export function emptyDraft(): Draft {
+export function emptyDraft(spendable: Attribute | null): Draft {
   return {
     phase: 'PICK_WORD',
     inkPotIndex: null,
@@ -41,6 +44,7 @@ export function emptyDraft(): Draft {
     languageRoll: null,
     penmanshipRoll: null,
     text: '',
+    spendable,
     skillUsedHere: null,
   };
 }
@@ -99,10 +103,16 @@ export function advance(draft: Draft, event: DraftEvent): Draft {
       if (draft.phase !== 'DECIDE_FLOURISH') return draft;
       return { ...draft, flourishAdjective: '', phase: 'ROLL_LANGUAGE' };
 
-    // Once per paragraph, and only on the roll it boosts. Whether the letter's
-    // one skill is still unspent is the session's fact, checked by the screen.
+    // Once per letter, only on the skill's own attribute, and only on the roll
+    // the current phase is waiting for (#124).
     case 'spendSkill':
-      if (draft.phase !== ROLL_PHASE[event.attribute] || draft.skillUsedHere !== null) return draft;
+      if (
+        event.attribute !== draft.spendable ||
+        draft.phase !== ROLL_PHASE[event.attribute] ||
+        draft.skillUsedHere !== null
+      ) {
+        return draft;
+      }
       return { ...draft, skillUsedHere: event.attribute };
 
     case 'setText':

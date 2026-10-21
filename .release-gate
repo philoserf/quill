@@ -1,0 +1,1 @@
+GATE_CMD="bun run check:ci"

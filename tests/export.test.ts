@@ -64,9 +64,9 @@ const cells = (line: string) => line.replace(/\\./g, '').split('|').length;
 describe('toMarkdown', () => {
   test('frontmatter contains character, skill, scenario, score, consequence', () => {
     const md = toMarkdown(session, scenario, character, skill);
-    expect(md).toContain('character: The Monk');
-    expect(md).toContain('skill: Illumination');
-    // Quoted so a title carrying a colon or a leading dash stays valid YAML.
+    // Quoted so a value carrying a colon or a leading dash stays valid YAML.
+    expect(md).toContain('character: "The Monk"');
+    expect(md).toContain('skill: "Illumination"');
     expect(md).toContain('scenario: "The Archduke"');
     expect(md).toContain('score: 5');
     expect(md).toContain('consequence: tepid');
@@ -200,5 +200,16 @@ describe('toMarkdown', () => {
     });
     const md = toMarkdown(session, awkward, character, skill);
     expect(md).toContain('scenario: "The Archduke: a reply"');
+  });
+
+  test('character and skill names with a colon stay valid frontmatter scalars (#127)', () => {
+    const md = toMarkdown(
+      session,
+      scenario,
+      { ...character, name: 'The Monk: of Whent' },
+      { ...skill, name: '- Illumination' },
+    );
+    expect(md).toContain('character: "The Monk: of Whent"');
+    expect(md).toContain('skill: "- Illumination"');
   });
 });

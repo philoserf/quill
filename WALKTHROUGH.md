@@ -4,7 +4,7 @@
 
 Quill is a single-page web app for playing Scott Malthouse's _Quill_, a solo letter-writing roleplaying game. The player picks a character, a skill and a scenario, then writes a letter of five paragraphs. Each paragraph draws a word from the scenario's ink pot, may attempt a flourish, and is scored by three dice rolls — Heart, Language and Penmanship. After the fifth paragraph the letter is totalled into one of four tiers, the scenario's consequence for that tier is shown, and the letter can be downloaded as Markdown.
 
-The technology is deliberately small: vanilla TypeScript with no framework, direct DOM construction, `localStorage` for persistence, Bun for the dev server, bundler and test runner, Biome for TypeScript formatting and lint, prettier for markdown. The built `dist/` is served as static assets by a Cloudflare Worker at `quill.philoserf.com`.
+The technology is deliberately small: vanilla TypeScript with no framework, direct DOM construction, `localStorage` for persistence, Bun for the dev server, bundler and test runner, Biome for TypeScript formatting and lint, `bun fmt` for markdown. The built `dist/` is served as static assets by a Cloudflare Worker at `quill.philoserf.com`.
 
 There is one entry point. `public/index.html` loads `src/main.ts` as a module; everything else is reached from there.
 

@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Formatting
 
-Two formatters, split by language and not interchangeable. **Biome owns TypeScript and JSON; prettier owns markdown** — Biome 2.5 does not process markdown at all, which is the whole reason prettier is here. Both run in `check`, `check:ci` and `format`, so markdown drift fails the pre-push hook like any other formatting.
+Two formatters, split by language and not interchangeable. **Biome owns TypeScript and JSON; `bun fmt` owns markdown** — Biome 2.5 does not process markdown at all, which is the whole reason `bun fmt` is here. It is Bun's built-in Prettier-compatible formatter, so it needs no dependency and reads `.prettierrc.json` and `.prettierignore` as prettier would. Both run in `check`, `check:ci` and `format`, so markdown drift fails the pre-push hook like any other formatting.
 
-`.prettierrc.json` sets `embeddedLanguageFormatting: "off"`. That is load-bearing rather than stylistic: `WALKTHROUGH.md` quotes source verbatim, and at prettier's default of `"auto"` it reformats code inside fenced blocks to its own style — double quotes at width 80, against Biome's single quotes at 100 — so a quoted snippet silently stops matching the file it came from. `.prettierignore` excludes `.issues/`, which is ignored through the global `core.excludesfile` rather than this repo's `.gitignore` and so is invisible to git but not to prettier.
+`.prettierrc.json` sets `embeddedLanguageFormatting: "off"`. That is load-bearing rather than stylistic: `WALKTHROUGH.md` quotes source verbatim, and at the default of `"auto"` it reformats code inside fenced blocks to its own style — double quotes at width 80, against Biome's single quotes at 100 — so a quoted snippet silently stops matching the file it came from. `.prettierignore` excludes `.issues/`, which is ignored through the global `core.excludesfile` rather than this repo's `.gitignore` and so is invisible to git but not to `bun fmt`, whose default ignore paths are `.gitignore`, `.prettierignore` and `.git/info/exclude`.
 
 ## Push and deploy
 

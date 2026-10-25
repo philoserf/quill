@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2
+
+### Changed
+
+- No change to the app. This release updates the development toolchain only: markdown is formatted by `bun fmt` instead of prettier, `task check` runs the full check, `task setup` no longer needs a Homebrew workaround on macOS 27, and Biome is updated to 2.6.
+
 ## 0.3.1
 
 ### Changed

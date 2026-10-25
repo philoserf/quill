@@ -1,8 +1,9 @@
 version: "3"
 
-# Only tasks that carry content a `package.json` script does not.
-# Everything else — dev, build, test, check, check:ci, format — is a `bun run <script>`;
-# see `package.json`, which the README documents as the way to run them.
+# Only tasks that carry content a `package.json` script does not, plus `check`,
+# which every repo in the workspace answers to. Everything else — dev, build,
+# test, check:ci, format — is a `bun run <script>`; see `package.json`, which
+# the README documents as the way to run them.
 
 tasks:
   setup:
@@ -19,10 +20,15 @@ tasks:
     cmds:
       - brew bundle check --file=Brewfile --verbose
 
+  check:
+    desc: Lint, format-check, type-check and test without changing files
+    cmds:
+      - bun run check:ci
+
   deploy:
     desc: Check, build, then deploy dist/ to Cloudflare
     cmds:
-      - bun run check:ci
+      - task: check
       - bun run build
       - |
         if token=$(security find-generic-password -s cloudflare-api-token -w 2>/dev/null); then
